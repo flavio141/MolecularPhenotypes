@@ -154,9 +154,14 @@ cython_debug/
 
 # Dataset
 dataset/fasta
+dataset/pdb
+dataset/cif
 
 # Models
 model
+
+# Utils
+utils/logs
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

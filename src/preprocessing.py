@@ -6,11 +6,39 @@ import requests as r
 from Bio import SeqIO
 from tqdm import tqdm
 from io import StringIO
+from Bio.PDB import PDBList
+from Bio.PDB.PDBIO import PDBIO
+from Bio.PDB.MMCIFParser import MMCIFParser
+from utils.logger import loggerError, logger
+
+def download_cif_file(cIDs):
+    try:
+        for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting CIF and Converting')):
+            pdb_id = cID.split('.')[0]
+            pdbl = PDBList()
+            pdbl.retrieve_pdb_file(pdb_id, pdir="dataset/cif", file_format="mmCif")
+
+            cif_file_path = os.path.join('dataset/cif',f'{pdb_id.lower()}.cif')
+            pdb_file_path = os.path.join('dataset/pdb',f'{pdb_id.lower()}.pdb')
+
+            parser = MMCIFParser()
+            structure = parser.get_structure(pdb_id, cif_file_path)
+
+            pdb_io = PDBIO()
+            pdb_io.set_structure(structure)
+            pdb_io.save(pdb_file_path)
+    except Exception as error:
+        logger.error(f'{error}')
 
 def download_pdb_file(cIDs):
     try:
+        not_pdb = []
+
         for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting PDB using UniProt ID')):
             pdb_id = cID.split(':')[0]
+            if (pdb_id + '.pdb') in os.listdir('dataset/pdb'):
+                continue
+
             pdb_url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
             filename = f"{pdb_id}.pdb"
             
@@ -19,13 +47,15 @@ def download_pdb_file(cIDs):
                 with open(os.path.join('dataset/pdb', filename), 'wb') as file:
                     file.write(pdb_response.content)
             else:
-                print(f"Errore durante il download del file {filename}.")
+                loggerError.error(f"{filename}")
+                not_pdb.append(filename)
+        
+        return not_pdb
     except r.exceptions.RequestException as e:
         print(f"Errore durante la richiesta per l'ID UniProt {cID}: {e}")
 
 
-
-def retrieve_fasta(cIDs, extract_data=False):
+def download_fasta_file(cIDs, extract_data=False):
     pSeq = []
 
     if extract_data == True:
@@ -64,5 +94,8 @@ def read_data(extract_data=False):
     if nans['wildtype'] == 0 or nans['position'] == 0 or nans['mutation'] == 0:
         data.dropna(subset = [min(nans, key=nans.get)])
 
-    retrieve_fasta(data['uniprot_id'].unique(), extract_data)
-    download_pdb_file(data['pdb_id'].unique())
+    download_fasta_file(data['uniprot_id'].unique(), extract_data)
+    not_pdb = download_pdb_file(data['pdb_id'].unique())
+
+    if not_pdb:
+        download_cif_file(not_pdb)
