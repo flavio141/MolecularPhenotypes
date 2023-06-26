@@ -1,0 +1,3 @@
+[submodule "GCN-for-Structure-and-Function"]
+	path = GCN-for-Structure-and-Function
+	url = https://github.com/stamakro/GCN-for-Structure-and-Function.git
