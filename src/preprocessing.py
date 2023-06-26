@@ -1,34 +1,39 @@
 import os
-import time
+import gemmi
+import urllib
 import pandas as pd
 import requests as r
 
-from Bio import SeqIO
 from tqdm import tqdm
-from io import StringIO
-from Bio.PDB import PDBList
-from Bio.PDB.PDBIO import PDBIO
-from Bio.PDB.MMCIFParser import MMCIFParser
+from Bio.PDB import PDBParser, Polypeptide, MMCIFParser, PDBIO
+from utils.classes import ChainSelector
 from utils.logger import loggerError, logger
 
-def download_cif_file(cIDs):
-    try:
-        for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting CIF and Converting')):
-            pdb_id = cID.split('.')[0]
-            pdbl = PDBList()
-            pdbl.retrieve_pdb_file(pdb_id, pdir="dataset/cif", file_format="mmCif")
+def download_cif_file(cIDs, pdbs):
+    for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting CIF and Converting')):
+        pdb_id = cID.split('_')[0]
 
-            cif_file_path = os.path.join('dataset/cif',f'{pdb_id.lower()}.cif')
-            pdb_file_path = os.path.join('dataset/pdb',f'{pdb_id.lower()}.pdb')
+        url = 'https://files.rcsb.org/download/{}.cif'.format(pdb_id)
+        response = urllib.request.urlopen(url)
+        cif_data = response.read().decode('utf-8')
+        
+        cif_file = '{}.cif'.format(pdb_id)
+        with open(os.path.join('dataset/cif',cif_file), 'w') as output_handle:
+            output_handle.write(cif_data)
+        
+        chains = [pdb for pdb in pdbs if cID in pdb]
 
+        for chain in chains:
             parser = MMCIFParser()
-            structure = parser.get_structure(pdb_id, cif_file_path)
 
+            structure = parser.get_structure("structure", os.path.join('dataset/cif', cif_file))
+            chain_structure = structure[0][chain]
             pdb_io = PDBIO()
-            pdb_io.set_structure(structure)
-            pdb_io.save(pdb_file_path)
-    except Exception as error:
-        logger.error(f'{error}')
+
+            pdb_io.set_structure(chain_structure)
+            pdb_save = f'dataset/pdb/{pdb_id}_{chain}.pdb'
+            pdb_io.save(pdb_save)
+
 
 def download_pdb_file(cIDs):
     try:
@@ -36,11 +41,12 @@ def download_pdb_file(cIDs):
 
         for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting PDB using UniProt ID')):
             pdb_id = cID.split(':')[0]
+            chain = cID.split(':')[1]
             if (pdb_id + '.pdb') in os.listdir('dataset/pdb'):
                 continue
 
-            pdb_url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
-            filename = f"{pdb_id}.pdb"
+            pdb_url = f'https://files.rcsb.org/download/{pdb_id}.pdb'
+            filename = f'{pdb_id}_{chain}.pdb'
             
             pdb_response = r.get(pdb_url)
             if pdb_response.status_code == 200:
@@ -52,33 +58,48 @@ def download_pdb_file(cIDs):
         
         return not_pdb
     except r.exceptions.RequestException as e:
-        print(f"Errore durante la richiesta per l'ID UniProt {cID}: {e}")
+        print(f'Error {cID}: {e}')
 
 
-def download_fasta_file(cIDs, extract_data=False):
-    pSeq = []
-
-    if extract_data == True:
-        for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting FASTA from UniProt ID')):
-            if (cID + '.fasta') in os.listdir('dataset/fasta'):
-                continue
-            
-            baseUrl="http://www.uniprot.org/uniprot/"
-            currentUrl=baseUrl+cID+".fasta"
-            response = r.post(currentUrl)
-            cData=''.join(response.text)
-
-            Seq=list(SeqIO.parse(StringIO(cData),'fasta'))
-            pSeq.extend(Seq)
-            SeqIO.write(Seq, f"dataset/fasta/{cID}.fasta", "fasta")
-            time.sleep(1)
-    else:
-        pass
-    
-    return pSeq
+def download_fasta_file(cIDs):
+    for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting FASTA')):
+        pdb_id = cID.split(':')[0]
+        chain = cID.split(':')[1]
+        url = 'https://www.rcsb.org/fasta/entry/{}.fasta?entity={}'.format(pdb_id, chain)
+        
+        response = urllib.request.urlopen(url)
+        fasta_data = response.read().decode('utf-8')
+        
+        fasta_file = '{}_{}.fasta'.format(pdb_id, chain)
+        with open(os.path.join('dataset/fasta',fasta_file), 'w') as output_handle:
+            output_handle.write(fasta_data)
 
 
-def read_data(extract_data=False):
+def feature_extraction(cIDs):
+    for cID in cIDs:
+        path_fasta = f'dataset/fasta/{cID}.fasta'
+        path_fasta_emb = f'embedding/fastaEmb/{cID}.embeddings.pkl'
+        os.system(f'python GCN-for-Structure-and-Function/scripts/seqvec_embedder.py --input={path_fasta} --output={path_fasta_emb}')
+
+        path_pdb = f'dataset/pdb/{cID}.pdb'
+        path_pdb_emb = f'embedding/distmap/{cID}.distmap.npy'
+        os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
+
+        # Extract structural features
+        #PDBFILE=example/${PROTEINID}.pdb
+        #DSSPEXE=scripts/dssp.exe
+        #STRUCFILE=example/${PROTEINID}.strucfeats.pkl
+
+        #python scripts/get_structural_feats.py ${PDBFILE} ${DSSPEXE} ${STRUCFILE}
+
+        # Create dictionary with all needed features
+        #LABELSFILE=datasets/data_pdb/Yterms.pkl
+        #OUTFILE=example/${PROTEINID}.pkl
+
+        #python scripts/generate_feats.py ${PROTEINID} ${FASTAFILE} ${EMBFILE} ${DMAPFILE} ${LABELSFILE} ${OUTFILE}
+
+
+def extract_data(extract_data=False):
     if not os.path.exists('dataset'):
         raise
 
@@ -94,8 +115,13 @@ def read_data(extract_data=False):
     if nans['wildtype'] == 0 or nans['position'] == 0 or nans['mutation'] == 0:
         data.dropna(subset = [min(nans, key=nans.get)])
 
-    download_fasta_file(data['uniprot_id'].unique(), extract_data)
+    # Download all PDB files
     not_pdb = download_pdb_file(data['pdb_id'].unique())
 
+    # Download PDB files too large as CIF and then convert them
     if not_pdb:
-        download_cif_file(not_pdb)
+        download_cif_file(list(set(not_pdb)), data['pdb_id'].unique())
+    
+    # Extract FASTA
+    download_fasta_file(data['pdb_id'].unique())
+    #feature_extraction(data['uniprot_id'].unique())
