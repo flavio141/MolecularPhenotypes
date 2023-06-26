@@ -1,12 +1,10 @@
 import os
-import gemmi
 import urllib
 import pandas as pd
 import requests as r
 
 from tqdm import tqdm
-from Bio.PDB import PDBParser, Polypeptide, MMCIFParser, PDBIO
-from utils.classes import ChainSelector
+from Bio.PDB import MMCIFParser, PDBIO
 from utils.logger import loggerError, logger
 
 def download_cif_file(cIDs, pdbs):
