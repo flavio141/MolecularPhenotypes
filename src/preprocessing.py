@@ -10,12 +10,15 @@ from utils.logger import loggerError, logger
 def download_cif_file(cIDs, pdbs):
     for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting CIF and Converting')):
         pdb_id = cID.split('_')[0]
+        cif_file = '{}.cif'.format(pdb_id)
+
+        if cif_file in os.listdir('dataset/cif'):
+            continue
 
         url = 'https://files.rcsb.org/download/{}.cif'.format(pdb_id)
         response = urllib.request.urlopen(url)
         cif_data = response.read().decode('utf-8')
         
-        cif_file = '{}.cif'.format(pdb_id)
         with open(os.path.join('dataset/cif',cif_file), 'w') as output_handle:
             output_handle.write(cif_data)
         
@@ -40,11 +43,12 @@ def download_pdb_file(cIDs):
         for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting PDB using UniProt ID')):
             pdb_id = cID.split(':')[0]
             chain = cID.split(':')[1]
-            if (pdb_id + '.pdb') in os.listdir('dataset/pdb'):
+            filename = f'{pdb_id}_{chain}.pdb'
+
+            if filename in os.listdir('dataset/pdb'):
                 continue
 
             pdb_url = f'https://files.rcsb.org/download/{pdb_id}.pdb'
-            filename = f'{pdb_id}_{chain}.pdb'
             
             pdb_response = r.get(pdb_url)
             if pdb_response.status_code == 200:
@@ -63,24 +67,30 @@ def download_fasta_file(cIDs):
     for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting FASTA')):
         pdb_id = cID.split(':')[0]
         chain = cID.split(':')[1]
+        fasta_file = '{}_{}.fasta'.format(pdb_id, chain)
+
+        if fasta_file in os.listdir('dataset/fasta'):
+            continue
+
         url = 'https://www.rcsb.org/fasta/entry/{}.fasta?entity={}'.format(pdb_id, chain)
         
         response = urllib.request.urlopen(url)
         fasta_data = response.read().decode('utf-8')
         
-        fasta_file = '{}_{}.fasta'.format(pdb_id, chain)
+        
         with open(os.path.join('dataset/fasta',fasta_file), 'w') as output_handle:
             output_handle.write(fasta_data)
 
 
 def feature_extraction(cIDs):
     for cID in cIDs:
-        path_fasta = f'dataset/fasta/{cID}.fasta'
-        path_fasta_emb = f'embedding/fastaEmb/{cID}.embeddings.pkl'
+        pdb = '_'.join(cID.split(':'))
+        path_fasta = f'dataset/fasta/{pdb}.fasta'
+        path_fasta_emb = f'embedding/fastaEmb/{pdb}.embeddings.pkl'
         os.system(f'python GCN-for-Structure-and-Function/scripts/seqvec_embedder.py --input={path_fasta} --output={path_fasta_emb}')
 
-        path_pdb = f'dataset/pdb/{cID}.pdb'
-        path_pdb_emb = f'embedding/distmap/{cID}.distmap.npy'
+        path_pdb = f'dataset/pdb/{pdb}.pdb'
+        path_pdb_emb = f'embedding/distmap/{pdb}.distmap.npy'
         os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
 
         # Extract structural features
@@ -122,4 +132,6 @@ def extract_data(extract_data=False):
     
     # Extract FASTA
     download_fasta_file(data['pdb_id'].unique())
-    #feature_extraction(data['uniprot_id'].unique())
+
+    # Extract Features
+    feature_extraction(data['pdb_id'].unique())

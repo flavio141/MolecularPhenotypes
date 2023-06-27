@@ -159,6 +159,7 @@ dataset/cif
 
 # Models
 model
+embedding
 
 # Utils
 utils/logs
