@@ -156,6 +156,7 @@ cython_debug/
 dataset/fasta
 dataset/pdb
 dataset/cif
+dataset/pdb_temp
 
 # Models
 model
@@ -163,6 +164,9 @@ embedding
 
 # Utils
 utils/logs
+
+# DSSP
+dssp
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
