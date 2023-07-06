@@ -11,6 +11,23 @@
             "program": "main.py",
             "console": "integratedTerminal",
             "justMyCode": false
-        }
+        },
+        {
+            "name": "Python: Structural",
+            "type": "python",
+            "request": "launch",
+            "program": "GCN-for-Structure-and-Function/scripts/get_structural_feats.py",
+            "console": "integratedTerminal",
+            "args": ["dataset/pdb/1ain_A.pdb", "/usr/bin/dssp", "embedding/structural_wt/1ain_A.strucfeats.pkl"],
+            "justMyCode": false
+        },
+        {
+            "name": "Python: Mutated",
+            "type": "python",
+            "request": "launch",
+            "program": "src/processing.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
     ]
 }

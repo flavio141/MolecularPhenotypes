@@ -1,13 +1,11 @@
 import os
-import shutil
 import urllib
+import requests
 import pandas as pd
 import requests as r
 
 from tqdm import tqdm
-from Bio import SeqIO
 from Bio.PDB import MMCIFParser, PDBIO, PDBParser, PDBList
-from Bio.PDB.MMCIF2Dict import MMCIF2Dict
 
 data = pd.read_csv('dataset/database.tsv', sep='\t')
 
@@ -90,46 +88,29 @@ def download_pdb_file(cIDs):
         print(f'Error {cID}: {e}')
 
 
-def download_fasta_file(cIDs):
-    for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting FASTA')):
-        pdb_id = cID.split(':')[0]
-        chain = cID.split(':')[1]
-        fasta_file = '{}_{}.fasta'.format(pdb_id, chain)
-        fasta_sequences = []
+def fetch_fasta(uniprot_id):
+    url = f"https://www.uniprot.org/uniprot/{uniprot_id}.fasta"
+    response = requests.get(url)
+    fasta_data = response.text.strip()
+    return fasta_data
 
-        if fasta_file in os.listdir('dataset/fasta'):
-            continue
 
-        if (pdb_id + '.pdb') in os.listdir('dataset/pdb_temp'):
-            for record in SeqIO.parse(f'dataset/pdb_temp/{pdb_id}.pdb', 'pdb-seqres'):
-                if record.annotations['chain'] == chain:
-                    fasta_header = f">{record.id}|{record.annotations['chain']}"
-                    fasta_sequence = str(record.seq)
-                    fasta_entry = f'{fasta_header}\n{fasta_sequence}'
-                    fasta_sequences.append(fasta_entry)
-        else:
-            mmcif_dict = MMCIF2Dict(f'dataset/cif/{pdb_id}.cif')
-            
-            
-            for entity_id in mmcif_dict['_entity.id']:
-                entity_type = mmcif_dict['_entity.type'][int(entity_id) - 1]
-                
-                if entity_type == 'polymer':
-                    sequence = mmcif_dict['_entity_poly.pdbx_seq_one_letter_code'][int(entity_id) - 1]
-                    sequence = sequence.replace('.', '')
-                    sequence = sequence.replace('\n', '')
-                    
-                    chain_id = mmcif_dict['_entity_poly.pdbx_strand_id'][int(entity_id) - 1]
-                    if chain_id == chain:
-                        fasta_header = f">{mmcif_dict['_entry.id'][0]}:{chain_id}|{chain_id}"
-                        
-                        fasta_entry = f"{fasta_header}\n{sequence}"
-                        fasta_sequences.append(fasta_entry)
-        
-        with open(os.path.join('dataset/fasta',fasta_file), 'w') as fasta_file:
-            fasta_file.write('\n'.join(fasta_sequences))
-    
-    shutil.rmtree('dataset/pdb_temp')
+def save_fasta(fasta_data, output_file):
+    with open(output_file, 'w') as file:
+        file.write(fasta_data)
+
+
+def download_uniprot_sequences(dataset):
+    pdb_map = data.groupby('uniprot_id')['pdb_id'].unique()
+    for uniprot_id, step in zip(dataset['uniprot_id'].unique(), tqdm(range(0, len(dataset['uniprot_id'].unique())), desc= 'Extracting FASTA')):
+        fasta_data = fetch_fasta(uniprot_id)
+        fasta_data = fasta_data.replace('.', '')
+        fasta_data = fasta_data.split('\n')
+
+        for pdb in pdb_map[uniprot_id]:
+            fasta = f'>{uniprot_id}\n{"".join(fasta_data[1:])}'
+            output_file = f"dataset/fasta/{pdb.replace(':', '_')}.fasta"
+            save_fasta(fasta, output_file)
 
 
 def feature_extraction(cIDs):
@@ -137,21 +118,24 @@ def feature_extraction(cIDs):
         pdb = '_'.join(cID.split(':'))
         path_fasta = f'dataset/fasta/{pdb}.fasta'
         path_fasta_emb = f'embedding/fastaEmb_wt/{pdb}.embeddings.pkl'
-        os.system(f'python GCN-for-Structure-and-Function/scripts/seqvec_embedder.py --input={path_fasta} --output={path_fasta_emb}')
+        if not f'{pdb}.embeddings.pkl' in os.listdir('embedding/fastaEmb_wt'):
+            os.system(f'python GCN-for-Structure-and-Function/scripts/seqvec_embedder.py --input={path_fasta} --output={path_fasta_emb}')
 
         path_pdb = f'dataset/pdb/{pdb}.pdb'
         path_pdb_emb = f'embedding/distmap_wt/{pdb}.distmap.npy'
-        os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
+        if not f'{pdb}.distmap.npy' in os.listdir('embedding/distmap_wt'):
+            os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
 
         # Extract structural features
-        #dsspexe = 'dssp/dssp'
-        #strucfile = f'embedding/structural/{pdb}.strucfeats.pkl'
-        #os.system(f'python GCN-for-Structure-and-Function/scripts/get_structural_feats.py dataset/pdb/{pdb}.pdb {dsspexe} {strucfile}')
+        dsspexe = '/usr/bin/dssp'
+        strucfile = f'embedding/structural_wt/{pdb}.strucfeats.pkl'
+        os.system(f'{dsspexe} dataset/pdb/{pdb}.pdb {strucfile}')
 
         # Create dictionary with all needed features
-        #output = f'embedding/results_wt/{pdb}.pkl'
-        #os.system(f'python GCN-for-Structure-and-Function/scripts/generate_feats.py {pdb} {path_fasta} {path_fasta_emb} {path_pdb_emb} {output}')
-
+        output = f'embedding/results_wt/{pdb}.pkl'
+        if not f'{pdb}.pkl' in os.listdir('embedding/results_wt'):
+            os.system(f'python GCN-for-Structure-and-Function/scripts/generate_feats.py {pdb} {path_fasta} {path_fasta_emb} {path_pdb_emb} {output}')
+    
 
 def extract_data_wt(extract_data=False):
     if not os.path.exists('dataset'):
@@ -175,7 +159,7 @@ def extract_data_wt(extract_data=False):
         download_cif_file(list(set(not_pdb)), data['pdb_id'].unique())
     
     # Extract FASTA
-    download_fasta_file(data['pdb_id'].unique())
+    download_uniprot_sequences(data)
 
     # Extract Features
     feature_extraction(data['pdb_id'].unique())
