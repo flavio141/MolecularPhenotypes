@@ -3,8 +3,10 @@ import argparse
 from src.preprocessing import extract_data_wt
 from src.processing import extract_data_mut
 
-parser = argparse.ArgumentParser(description=('main.py extract with UniProtID the FASTA information'))
-parser.add_argument('--extract_data', required=False, default=True, help='Tell if necessary to extract FASTA information from UniProtID')
+parser = argparse.ArgumentParser(description=('main.py extract with UniProtID and PDB files all the features for the wildtype Protein'))
+parser.add_argument('--extract_data_wt', required=False, default=True, help='Tell if necessary to extract information using UniProtID and PDB files')
+parser.add_argument('--extract_data_mut', required=False, default=True, help='Tell if necessary to extract information using UniProtID and PDB files for mutated proteins')
+
 
 folders = ['dataset/fasta', 'dataset/pdb', 'dataset/cif', 'dataset/pdb_temp',
            'dataset/fasta_mut', 
@@ -18,8 +20,8 @@ def main():
             os.makedirs(folder)
 
     if args.extract_data == True:
-        extract_data_wt(args.extract_data)
-        extract_data_mut()
+        extract_data_wt(args.extract_data_wt)
+        extract_data_mut(args.extract_data_mut)
 
 
 if __name__ == "__main__":

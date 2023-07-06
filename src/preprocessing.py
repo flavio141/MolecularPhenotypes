@@ -9,41 +9,45 @@ from Bio.PDB import MMCIFParser, PDBIO, PDBParser, PDBList
 
 data = pd.read_csv('dataset/database.tsv', sep='\t')
 
+
 def download_cif_file(cIDs, pdbs):
-    for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting CIF and Converting')):
-        pdb_id = cID.split(':')[0]
-        cif_file = '{}.cif'.format(pdb_id)
-        print(f'Download {cif_file}')
+    try:
+        for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting CIF and Converting')):
+            pdb_id = cID.split(':')[0]
+            cif_file = '{}.cif'.format(pdb_id)
+            print(f'Download {cif_file}')
 
-        if (pdb_id + '_' + cID.split(':')[1] + '.pdb') in os.listdir('dataset/pdb'):
-            continue
+            if (pdb_id + '_' + cID.split(':')[1] + '.pdb') in os.listdir('dataset/pdb'):
+                continue
 
-        url = 'https://files.rcsb.org/download/{}.cif'.format(pdb_id)
-        response = urllib.request.urlopen(url)
-        cif_data = response.read().decode('utf-8')
-        
-        with open(os.path.join('dataset/cif',cif_file), 'w') as output_handle:
-            output_handle.write(cif_data)
-        
-        chains = [pdb for pdb in pdbs if cID.split('.')[0] in pdb]
-
-        for chain in chains:
-            parser = MMCIFParser(QUIET=True)
-            structure = parser.get_structure(pdb_id, os.path.join('dataset/cif', cif_file))
-
-            selected_chain = None
-            for element in structure[0]:
-                if element.get_id() == chain.split(':')[1]:
-                    selected_chain = element
-                    if len(selected_chain.get_id()) > 1:
-                        selected_chain.id = '-'
-                    break
+            url = 'https://files.rcsb.org/download/{}.cif'.format(pdb_id)
+            response = urllib.request.urlopen(url)
+            cif_data = response.read().decode('utf-8')
             
-            pdb_io = PDBIO()
+            with open(os.path.join('dataset/cif',cif_file), 'w') as output_handle:
+                output_handle.write(cif_data)
+            
+            chains = [pdb for pdb in pdbs if cID.split('.')[0] in pdb]
 
-            pdb_io.set_structure(selected_chain)
-            pdb_save = f'dataset/pdb/{pdb_id}_{chain.split(":")[1]}.pdb'
-            pdb_io.save(pdb_save)
+            for chain in chains:
+                parser = MMCIFParser(QUIET=True)
+                structure = parser.get_structure(pdb_id, os.path.join('dataset/cif', cif_file))
+
+                selected_chain = None
+                for element in structure[0]:
+                    if element.get_id() == chain.split(':')[1]:
+                        selected_chain = element
+                        if len(selected_chain.get_id()) > 1:
+                            selected_chain.id = '-'
+                        break
+                
+                pdb_io = PDBIO()
+
+                pdb_io.set_structure(selected_chain)
+                pdb_save = f'dataset/pdb/{pdb_id}_{chain.split(":")[1]}.pdb'
+                pdb_io.save(pdb_save)
+    except Exception as error:
+        print(f'There was an error: {error}')
 
 
 def download_pdb_file(cIDs):
@@ -88,78 +92,83 @@ def download_pdb_file(cIDs):
         print(f'Error {cID}: {e}')
 
 
-def fetch_fasta(uniprot_id):
-    url = f"https://www.uniprot.org/uniprot/{uniprot_id}.fasta"
-    response = requests.get(url)
-    fasta_data = response.text.strip()
-    return fasta_data
+def download_uniprot_sequences():
+    try:
+        pdb_map = data.groupby('uniprot_id')['pdb_id'].unique()
+        for uniprot_id, step in zip(data['uniprot_id'].unique(), tqdm(range(0, len(data['uniprot_id'].unique())), desc= 'Extracting FASTA')):
+            url = f"https://www.uniprot.org/uniprot/{uniprot_id}.fasta"
+            response = requests.get(url)
+            fasta_data = response.text.strip()
 
+            fasta_data = fasta_data.replace('.', '')
+            fasta_data = fasta_data.split('\n')
 
-def save_fasta(fasta_data, output_file):
-    with open(output_file, 'w') as file:
-        file.write(fasta_data)
-
-
-def download_uniprot_sequences(dataset):
-    pdb_map = data.groupby('uniprot_id')['pdb_id'].unique()
-    for uniprot_id, step in zip(dataset['uniprot_id'].unique(), tqdm(range(0, len(dataset['uniprot_id'].unique())), desc= 'Extracting FASTA')):
-        fasta_data = fetch_fasta(uniprot_id)
-        fasta_data = fasta_data.replace('.', '')
-        fasta_data = fasta_data.split('\n')
-
-        for pdb in pdb_map[uniprot_id]:
-            fasta = f'>{uniprot_id}\n{"".join(fasta_data[1:])}'
-            output_file = f"dataset/fasta/{pdb.replace(':', '_')}.fasta"
-            save_fasta(fasta, output_file)
+            for pdb in pdb_map[uniprot_id]:
+                fasta = f'>{uniprot_id}\n{"".join(fasta_data[1:])}'
+                output_file = f"dataset/fasta/{pdb.replace(':', '_')}.fasta"
+                with open(output_file, 'w') as file:
+                    file.write(fasta)
+    except Exception as error:
+        print(f'There was an error: {error}')
 
 
 def feature_extraction(cIDs):
-    for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting Features')):
-        pdb = '_'.join(cID.split(':'))
-        path_fasta = f'dataset/fasta/{pdb}.fasta'
-        path_fasta_emb = f'embedding/fastaEmb_wt/{pdb}.embeddings.pkl'
-        if not f'{pdb}.embeddings.pkl' in os.listdir('embedding/fastaEmb_wt'):
-            os.system(f'python GCN-for-Structure-and-Function/scripts/seqvec_embedder.py --input={path_fasta} --output={path_fasta_emb}')
+    try:
+        for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting Features')):
+            pdb = '_'.join(cID.split(':'))
+            path_fasta = f'dataset/fasta/{pdb}.fasta'
+            path_fasta_emb = f'embedding/fastaEmb_wt/{pdb}.embeddings.pkl'
+            if not f'{pdb}.embeddings.pkl' in os.listdir('embedding/fastaEmb_wt'):
+                os.system(f'python GCN-for-Structure-and-Function/scripts/seqvec_embedder.py --input={path_fasta} --output={path_fasta_emb}')
 
-        path_pdb = f'dataset/pdb/{pdb}.pdb'
-        path_pdb_emb = f'embedding/distmap_wt/{pdb}.distmap.npy'
-        if not f'{pdb}.distmap.npy' in os.listdir('embedding/distmap_wt'):
-            os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
+            path_pdb = f'dataset/pdb/{pdb}.pdb'
+            path_pdb_emb = f'embedding/distmap_wt/{pdb}.distmap.npy'
+            if not f'{pdb}.distmap.npy' in os.listdir('embedding/distmap_wt'):
+                os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
 
-        # Extract structural features
-        dsspexe = '/usr/bin/dssp'
-        strucfile = f'embedding/structural_wt/{pdb}.strucfeats.pkl'
-        os.system(f'{dsspexe} dataset/pdb/{pdb}.pdb {strucfile}')
+            # Extract structural features
+            dsspexe = '/usr/bin/dssp'
+            strucfile = f'embedding/structural_wt/{pdb}.strucfeats.pkl'
+            if not f'{pdb}.strucfeats.pkl' in os.listdir('embedding/structural_wt'):
+                os.system(f'{dsspexe} dataset/pdb/{pdb}.pdb {strucfile}')
 
-        # Create dictionary with all needed features
-        output = f'embedding/results_wt/{pdb}.pkl'
-        if not f'{pdb}.pkl' in os.listdir('embedding/results_wt'):
-            os.system(f'python GCN-for-Structure-and-Function/scripts/generate_feats.py {pdb} {path_fasta} {path_fasta_emb} {path_pdb_emb} {output}')
-    
+            # Create dictionary with all needed features
+            output = f'embedding/results_wt/{pdb}.pkl'
+            if not f'{pdb}.pkl' in os.listdir('embedding/results_wt'):
+                os.system(f'python GCN-for-Structure-and-Function/scripts/generate_feats.py {pdb} {path_fasta} {path_fasta_emb} {path_pdb_emb} {output}')
+    except Exception as error:
+        print(f'There was an error: {error}')
+
 
 def extract_data_wt(extract_data=False):
     if not os.path.exists('dataset'):
         raise
-
-    data.drop(columns=['phenotypic_annotation'], inplace=True)
-
-    nans = {'wildtype' : data['wildtype'].isnull().sum(), 
-            'position': data['position'].isnull().sum(), 
-            'mutation': data['mutation'].isnull().sum()
-        }
     
-    if nans['wildtype'] == 0 or nans['position'] == 0 or nans['mutation'] == 0:
-        data.dropna(subset = [min(nans, key=nans.get)])
+    if extract_data:
+        try:
+            data.drop(columns=['phenotypic_annotation'], inplace=True)
 
-    # Download all PDB files
-    not_pdb = download_pdb_file(data['pdb_id'].unique())
+            nans = {'wildtype' : data['wildtype'].isnull().sum(), 
+                    'position': data['position'].isnull().sum(), 
+                    'mutation': data['mutation'].isnull().sum()
+                }
+            
+            if nans['wildtype'] == 0 or nans['position'] == 0 or nans['mutation'] == 0:
+                data.dropna(subset = [min(nans, key=nans.get)])
 
-    # Download PDB files too large as CIF and then convert them
-    if not_pdb:
-        download_cif_file(list(set(not_pdb)), data['pdb_id'].unique())
-    
-    # Extract FASTA
-    download_uniprot_sequences(data)
+            # Download all PDB files
+            not_pdb = download_pdb_file(data['pdb_id'].unique())
 
-    # Extract Features
-    feature_extraction(data['pdb_id'].unique())
+            # Download PDB files too large as CIF and then convert them
+            if not_pdb:
+                download_cif_file(list(set(not_pdb)), data['pdb_id'].unique())
+            
+            # Extract FASTA
+            download_uniprot_sequences()
+
+            # Extract Features
+            feature_extraction(data['pdb_id'].unique())
+        except Exception as error:
+            print(f'There was an error: {error}')
+    else:
+        print('Data not extracted as declared')
