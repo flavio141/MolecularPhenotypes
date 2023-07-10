@@ -1038,7 +1038,7 @@ O14757	K	38	R	2ydi:A	38	Abolishes kinase activity.			-1
 O14757	D	130	A	2ydi:A	130	Abolishes kinase activity.			-1												
 O14757	R	379	E	5wi2:A	379	In 3RE mutant. Disrupts the folding and/or conformation, allowing increased accessibility to FBXO6 component of SCF-type E3 ubiquitin ligase complex														-1	
 O14757	K	436	R	5wi2:A	436	Enhances stability of the protein, probably by preventing ubiquitination at this site.					-1									1	
-Q9BUD6	E	122	A	3d34:B	96	Strongly reduced metal-dependent interaction with integrin	-1														
+Q9BUD6	A	122	E	3d34:B	96	Strongly reduced metal-dependent interaction with integrin	-1														
 Q9BUD6	E	141	A	3d34:B	115	Strongly reduced metal-dependent interaction with integrin	-1														
 P21333	K	42	R	3hop:B	42	Abrogates ASB2alpha-mediated degradation without altering ASB2alpha binding															
 P21333	K	43	R	3hop:B	43	Abrogates ASB2alpha-mediated degradation without altering ASB2alpha binding															
@@ -2238,7 +2238,6 @@ O00206	N	575	A	4g8a:B	575	Abolishes LPS-response and prevents the cell surface e
 Q9Y2G1	R	454	A	5yhu:A	445	Decreased affinity for DNA.		-1													
 Q9Y2G1	R	478	A	5yhu:A	469	Decreased affinity for DNA.		-1													
 Q9Y2G1	R	530	A	5yhu:A	521	Decreased affinity for DNA.		-1													
-Q9Y2G2	L	366	R	4ikm:A	393	Inhibits homodimer formation.	-1														
 Q8WTS6	E	220	A	1h3i:A	220	Increases near-attack conformations.															
 Q8WTS6	E	228	A	1h3i:A	228	Increases near-attack conformations.															
 Q8WTS6	Y	245	A	1h3i:A	245	Significantly reduces the monomethyltransferase activity but increases the dimethyltransferase activity.															
@@ -3945,8 +3944,6 @@ P50440	R	322	E	3jdw:A	322	Significantly reduced activity.			-1
 P50440	S	355	A	3jdw:A	355	Significantly reduced activity.			-1												
 P50440	C	407	S	3jdw:A	407	Complete loss of activity			-1												
 P50440	C	410	A	3jdw:A	410	No effect on activity.			0												
-Q9UJX3	L	56	R	3ffl:A	42	Loss of homodimerization	-1														
-Q9UJX3	L	60	K	3ffl:A	46	Loss of homodimerization	-1														
 Q9NR71	G	124	R	4wgk:B	124	Loss of ceramide hydrolase activity.			-1												
 Q9NR71	H	194	A	4wgk:B	194	Loss of ceramide hydrolase activity.			-1												
 Q9NR71	H	196	A	4wgk:B	196	Loss of ceramide hydrolase activity.			-1												
@@ -4964,8 +4961,6 @@ P00740	K	311	T	6x5j:A	100	Strongly increases enzyme activity with a synthetic pe
 P00740	Y	312	A	6x5j:A	101	Strongly decreases enzyme activity with a synthetic peptide substrate.			1												
 P00740	Y	391	T	6x5j:A	180	Strongly increases enzyme activity with a synthetic peptide substrate			1												
 O43715	F	27	A	6i3y:A	40	Impairs interaction with PRELID3A.	-1														
-Q8TAX9	K	233	A	5tj4:E	1233	Does not prevent cleavage by granzyme A (GZMA).															
-Q8TAX9	K	239	A	5tj4:E	1239	Abolished cleavage by granzyme A (GZMA), preventing release of the N-terminal moiety (Gasdermin-B, N-terminal) and ability to induce pyroptosis in target cells of cytotoxic T-cells and natural killer (NK) cells.															
 O43719	Y	136	D	6y50:q	136	Loss of interaction with U snRNPs.		-1													
 P00749	S	323	E	2vnt:A	154	Abolishes phosphorylation, proadhesive function and ability to induce chemotactic response				-1											
 Q9BSM1	Y	191	A	4hpl:B	191	Abolishes interaction with BCOR and BCORL1.	-1														
