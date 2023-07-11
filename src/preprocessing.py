@@ -2,11 +2,11 @@ import os
 import pickle
 import urllib
 import requests
+import numpy as np
 import pandas as pd
 import requests as r
 
 from tqdm import tqdm
-from scipy import stats
 from utils.utils import save_excel
 from sklearn.metrics.pairwise import cosine_similarity
 from Bio.PDB import MMCIFParser, PDBIO, PDBParser, PDBList
@@ -101,6 +101,16 @@ def download_uniprot_sequences():
         pdb_map = data.groupby('uniprot_id')['pdb_id'].unique()
         for uniprot_id, step in zip(data['uniprot_id'].unique(), tqdm(range(0, len(data['uniprot_id'].unique())), desc= 'Extracting FASTA')):
             url = f"https://www.uniprot.org/uniprot/{uniprot_id}.fasta"
+
+            skip = False
+            
+            for pdb_name in pdb_map[uniprot_id]:
+                if (pdb_name.replace(':', '_') + '.fasta') in os.listdir('dataset/fasta'):
+                    skip = True
+            
+            if skip:
+                continue
+
             response = requests.get(url)
             fasta_data = response.text.strip()
 
@@ -127,6 +137,8 @@ def fasta_mutated(wildtype, position, mutation, pdb):
         if fasta_original.split('\n')[1][pos - 1] == wt:
             if ',' in mut:
                 for m in mut.split(','):
+                    if f'{pdb_id}_{chain}_{m}.fasta' in os.listdir('dataset/fasta_mut'):
+                        continue
                     mutation = m
                     fasta_seq = fasta_original.split('\n')[1][:pos - 1] + mutation + fasta_original.split('\n')[1][pos:]
                     fasta_mut = fasta_original.split('\n')[0] + '\n' + fasta_seq
@@ -135,6 +147,8 @@ def fasta_mutated(wildtype, position, mutation, pdb):
                         mutated.write(fasta_mut)
             else:
                 mutation = mut
+                if f'{pdb_id}_{chain}_{mut}.fasta' in os.listdir('dataset/fasta_mut'):
+                        continue
                 fasta_seq = fasta_original.split('\n')[1][:pos - 1] + mutation + fasta_original.split('\n')[1][pos:]
                 fasta_mut = fasta_original.split('\n')[0] + '\n' + fasta_seq
 
@@ -185,27 +199,35 @@ def feature_extraction_wt(cIDs):
 def similarity():
     cos_similarity = {}
 
-    for pdb, mut, count in zip(data['pdb_id'], data['mut'], tqdm(range(0, len(data['mut'])), desc= 'Similarity')):
+    for pdb, mut, count in zip(data['pdb_id'], data['mutation'], tqdm(range(0, len(data['mutation'])), desc= 'Similarity')):
         pdb_id = "_".join(pdb.split(':'))
         
         if pdb not in cos_similarity.keys():
-            cos_similarity[pdb] = {}
+            cos_similarity[pdb_id] = {}
 
         with open (f'embedding/fastaEmb_wt/{pdb_id}.embeddings.pkl', 'rb') as wt:
             wildtype = pickle.load(wt)
+
 
         if ',' in mut:
             for m in mut.split(','):
                 with open (f'embedding/fastaEmb_mut/{pdb_id}_{m}.embeddings.pkl', 'rb') as mt:
                     mutated = pickle.load(mt)
-                similarity_matrix = cosine_similarity(wildtype, mutated)
-                cos_similarity[pdb][pdb_id + '_' + m] = similarity_matrix
+                similarity_matrix = cosine_similarity(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
+                cos_similarity[pdb_id][pdb_id + '_' + m] = [similarity_matrix]
+
+                pearson = np.corrcoef(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
+                cos_similarity[pdb_id][pdb_id + '_' + m].append(pearson)
         else:
             with open (f'embedding/fastaEmb_mut/{pdb_id}_{mut}.embeddings.pkl', 'rb') as mt:
                 mutated = pickle.load(mt)
-            similarity_matrix = cosine_similarity(wildtype, mutated)
-            cos_similarity[pdb][pdb_id + '_' + mut] = similarity_matrix
-    
+            
+            similarity_matrix = cosine_similarity(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
+            cos_similarity[pdb_id][pdb_id + '_' + mut] = [similarity_matrix]
+
+            pearson = np.corrcoef(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
+            cos_similarity[pdb_id][pdb_id + '_' + mut].append(pearson)
+
     save_excel(cos_similarity)
 
 
@@ -244,8 +266,8 @@ def extract_data_wt(extract_data=False):
 
 
 def extract_data_mut(extract_data_mut=False):
-    if extract_data_mut:
-        fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
-        feature_extraction_mut(os.listdir('dataset/fasta_mut'))
+    #if extract_data_mut:
+        #fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
+        #feature_extraction_mut(os.listdir('dataset/fasta_mut'))
     
     similarity()

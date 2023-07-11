@@ -9,7 +9,8 @@ def save_excel(mutation_similarity):
     # Scrivere le intestazioni delle colonne
     sheet["A1"] = "PDB wt"
     sheet["B1"] = "PDB mutated"
-    sheet["C1"] = "Similarity"
+    sheet["C1"] = "Similarity: Cosine"
+    sheet["D1"] = "Similarity: Pearson"
 
     # Scrivere i dati nel foglio di lavoro
     row = 2
@@ -17,7 +18,8 @@ def save_excel(mutation_similarity):
         for subkey, value in subkeys.items():
             sheet.cell(row=row, column=1, value=keys)
             sheet.cell(row=row, column=2, value=subkey)
-            sheet.cell(row=row, column=3, value=value)
+            sheet.cell(row=row, column=3, value=value[0])
+            sheet.cell(row=row, column=4, value=value[1])
             row += 1
 
     # Salvare il workbook come file Excel
