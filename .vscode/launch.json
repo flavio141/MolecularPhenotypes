@@ -9,6 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "main.py",
+            "module": "GCN-for-Structure-and-Function",
             "console": "integratedTerminal",
             "justMyCode": false
         },
@@ -18,7 +19,7 @@
             "request": "launch",
             "program": "GCN-for-Structure-and-Function/scripts/get_structural_feats.py",
             "console": "integratedTerminal",
-            "args": ["dataset/pdb/1ain_A.pdb", "/usr/bin/dssp", "embedding/structural_wt/1ain_A.strucfeats.pkl"],
+            "args": ["dataset/pdb/1a9n_C.pdb", "/usr/bin/dssp", "embedding/structural_wt/1a9n_C.strucfeats.pkl"],
             "justMyCode": false
         },
         {

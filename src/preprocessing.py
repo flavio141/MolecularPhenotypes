@@ -2,12 +2,13 @@ import os
 import pickle
 import urllib
 import requests
+import subprocess
 import numpy as np
 import pandas as pd
 import requests as r
 
 from tqdm import tqdm
-from utils.utils import save_excel
+from utils.utils import save_similarity, save_percentage
 from sklearn.metrics.pairwise import cosine_similarity
 from Bio.PDB import MMCIFParser, PDBIO, PDBParser, PDBList
 
@@ -137,22 +138,22 @@ def fasta_mutated(wildtype, position, mutation, pdb):
         if fasta_original.split('\n')[1][pos - 1] == wt:
             if ',' in mut:
                 for m in mut.split(','):
-                    if f'{pdb_id}_{chain}_{m}.fasta' in os.listdir('dataset/fasta_mut'):
+                    if f'{pdb_id}_{chain}_{wt}_{pos}_{m}.fasta' in os.listdir('dataset/fasta_mut'):
                         continue
                     mutation = m
                     fasta_seq = fasta_original.split('\n')[1][:pos - 1] + mutation + fasta_original.split('\n')[1][pos:]
                     fasta_mut = fasta_original.split('\n')[0] + '\n' + fasta_seq
 
-                    with open(f'dataset/fasta_mut/{pdb_id}_{chain}_{m}.fasta', 'w') as mutated:
+                    with open(f'dataset/fasta_mut/{pdb_id}_{chain}_{wt}_{pos}_{m}.fasta', 'w') as mutated:
                         mutated.write(fasta_mut)
             else:
                 mutation = mut
-                if f'{pdb_id}_{chain}_{mut}.fasta' in os.listdir('dataset/fasta_mut'):
+                if f'{pdb_id}_{chain}_{wt}_{pos}_{mut}.fasta' in os.listdir('dataset/fasta_mut'):
                         continue
                 fasta_seq = fasta_original.split('\n')[1][:pos - 1] + mutation + fasta_original.split('\n')[1][pos:]
                 fasta_mut = fasta_original.split('\n')[0] + '\n' + fasta_seq
 
-                with open(f'dataset/fasta_mut/{pdb_id}_{chain}_{mut}.fasta', 'w') as mutated:
+                with open(f'dataset/fasta_mut/{pdb_id}_{chain}_{wt}_{pos}_{mut}.fasta', 'w') as mutated:
                     mutated.write(fasta_mut)
         else:
             original = fasta_original.split("\n")[1][pos - 1]
@@ -186,7 +187,10 @@ def feature_extraction_wt(cIDs):
             dsspexe = '/usr/bin/dssp'
             strucfile = f'embedding/structural_wt/{pdb}.strucfeats.pkl'
             if not f'{pdb}.strucfeats.pkl' in os.listdir('embedding/structural_wt'):
-                os.system(f'{dsspexe} dataset/pdb/{pdb}.pdb {strucfile}')
+                result = subprocess.check_output(f'python GCN-for-Structure-and-Function/scripts/get_structural_feats.py dataset/pdb/{pdb}.pdb {dsspexe} {strucfile}', shell=True)
+                print(result)
+                #os.system(f'python GCN-for-Structure-and-Function/scripts/get_structural_feats.py dataset/pdb/{pdb}.pdb {dsspexe} {strucfile}')
+                #os.system(f'{dsspexe} dataset/pdb/{pdb}.pdb {strucfile}')
 
             # Create dictionary with all needed features
             output = f'embedding/results_wt/{pdb}.pkl'
@@ -228,7 +232,25 @@ def similarity():
             pearson = np.corrcoef(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
             cos_similarity[pdb_id][pdb_id + '_' + mut].append(pearson)
 
-    save_excel(cos_similarity)
+    save_similarity(cos_similarity)
+
+
+def percentage():
+    percentage_dict = {}
+    for fasta in os.listdir('dataset/fasta_mut'):
+        sequence = ''
+        with open(fasta, 'r') as file:
+            for line in file:
+                line = line.strip()
+                if line.startswith('>'):
+                    continue
+                sequence += line
+        position = int(fasta.split('_')[3])
+        perc = position / len(sequence) * 100
+
+        percentage_dict[fasta.split('.')[0]] = perc
+    
+    save_percentage(perc)
 
 
 def extract_data_wt(extract_data=False):
@@ -266,8 +288,9 @@ def extract_data_wt(extract_data=False):
 
 
 def extract_data_mut(extract_data_mut=False):
-    #if extract_data_mut:
-        #fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
-        #feature_extraction_mut(os.listdir('dataset/fasta_mut'))
+    if extract_data_mut:
+        fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
+        feature_extraction_mut(os.listdir('dataset/fasta_mut'))
     
     similarity()
+    percentage()
