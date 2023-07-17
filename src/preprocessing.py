@@ -1,4 +1,5 @@
 import os
+import json
 import pickle
 import urllib
 import requests
@@ -8,7 +9,7 @@ import pandas as pd
 import requests as r
 
 from tqdm import tqdm
-from utils.utils import save_similarity, save_percentage
+from utils.utils import save_percentage
 from sklearn.metrics.pairwise import cosine_similarity
 from Bio.PDB import MMCIFParser, PDBIO, PDBParser, PDBList
 
@@ -184,18 +185,18 @@ def feature_extraction_wt(cIDs):
                 os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
 
             # Extract structural features
-            dsspexe = '/usr/bin/dssp'
-            strucfile = f'embedding/structural_wt/{pdb}.strucfeats.pkl'
-            if not f'{pdb}.strucfeats.pkl' in os.listdir('embedding/structural_wt'):
-                result = subprocess.check_output(f'python GCN-for-Structure-and-Function/scripts/get_structural_feats.py dataset/pdb/{pdb}.pdb {dsspexe} {strucfile}', shell=True)
-                print(result)
+            #dsspexe = '/usr/bin/dssp'
+            #strucfile = f'embedding/structural_wt/{pdb}.strucfeats.pkl'
+            #if not f'{pdb}.strucfeats.pkl' in os.listdir('embedding/structural_wt'):
+                #result = subprocess.check_output(f'python GCN-for-Structure-and-Function/scripts/get_structural_feats.py dataset/pdb/{pdb}.pdb {dsspexe} {strucfile}', shell=True)
+                #print(result)
                 #os.system(f'python GCN-for-Structure-and-Function/scripts/get_structural_feats.py dataset/pdb/{pdb}.pdb {dsspexe} {strucfile}')
                 #os.system(f'{dsspexe} dataset/pdb/{pdb}.pdb {strucfile}')
 
             # Create dictionary with all needed features
-            output = f'embedding/results_wt/{pdb}.pkl'
-            if not f'{pdb}.pkl' in os.listdir('embedding/results_wt'):
-                os.system(f'python GCN-for-Structure-and-Function/scripts/generate_feats.py {pdb} {path_fasta} {path_fasta_emb} {path_pdb_emb} {output}')
+            #output = f'embedding/results_wt/{pdb}.pkl'
+            #if not f'{pdb}.pkl' in os.listdir('embedding/results_wt'):
+                #os.system(f'python GCN-for-Structure-and-Function/scripts/generate_feats.py {pdb} {path_fasta} {path_fasta_emb} {path_pdb_emb} {output}')
     except Exception as error:
         print(f'There was an error: {error}')
 
@@ -203,43 +204,51 @@ def feature_extraction_wt(cIDs):
 def similarity():
     cos_similarity = {}
 
-    for pdb, mut, count in zip(data['pdb_id'], data['mutation'], tqdm(range(0, len(data['mutation'])), desc= 'Similarity')):
-        pdb_id = "_".join(pdb.split(':'))
-        
-        if pdb not in cos_similarity.keys():
-            cos_similarity[pdb_id] = {}
+    try:
+        for pdb, wt, pos, mut, count in zip(data['pdb_id'], data['wildtype'], data['position'], data['mutation'], tqdm(range(0, len(data['mutation'])), desc= 'Similarity')):
+            pdb_id = "_".join(pdb.split(':'))
 
-        with open (f'embedding/fastaEmb_wt/{pdb_id}.embeddings.pkl', 'rb') as wt:
-            wildtype = pickle.load(wt)
+            if pdb.split(':')[0] == '4jnw': # perché ha 32000 amminoacidi e ci vuole troppo, non riesce a gestirlo
+                continue
+            
+            if pdb not in cos_similarity.keys():
+                cos_similarity[pdb_id] = {}
+
+            with open (f'embedding/fastaEmb_wt/{pdb_id}.embeddings.pkl', 'rb') as wild:
+                wildtype = pickle.load(wild)
 
 
-        if ',' in mut:
-            for m in mut.split(','):
-                with open (f'embedding/fastaEmb_mut/{pdb_id}_{m}.embeddings.pkl', 'rb') as mt:
+            if ',' in mut:
+                for m in mut.split(','):
+                    with open (f'embedding/fastaEmb_mut/{pdb_id}_{wt}_{pos}_{m}.embeddings.pkl', 'rb') as mt:
+                        mutated = pickle.load(mt)
+                    similarity_matrix = cosine_similarity(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
+                    cos_similarity[pdb_id][pdb_id + '_' + m] = [similarity_matrix]
+
+                    pearson = np.corrcoef(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
+                    cos_similarity[pdb_id][pdb_id + '_' + m].append(pearson.tolist())
+            else:
+                with open (f'embedding/fastaEmb_mut/{pdb_id}_{wt}_{pos}_{mut}.embeddings.pkl', 'rb') as mt:
                     mutated = pickle.load(mt)
+                
                 similarity_matrix = cosine_similarity(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
-                cos_similarity[pdb_id][pdb_id + '_' + m] = [similarity_matrix]
+                cos_similarity[pdb_id][pdb_id + '_' + mut] = [similarity_matrix]
 
                 pearson = np.corrcoef(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
-                cos_similarity[pdb_id][pdb_id + '_' + m].append(pearson)
-        else:
-            with open (f'embedding/fastaEmb_mut/{pdb_id}_{mut}.embeddings.pkl', 'rb') as mt:
-                mutated = pickle.load(mt)
-            
-            similarity_matrix = cosine_similarity(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
-            cos_similarity[pdb_id][pdb_id + '_' + mut] = [similarity_matrix]
-
-            pearson = np.corrcoef(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
-            cos_similarity[pdb_id][pdb_id + '_' + mut].append(pearson)
-
-    save_similarity(cos_similarity)
+                cos_similarity[pdb_id][pdb_id + '_' + mut].append(pearson.tolist())
+        
+        with open(f'embedding/additional_features/similarity.json', 'wb') as sim:
+            json.dump(cos_similarity, sim)#, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception as error:
+        print(f'There was an error: {error}')
+    
 
 
 def percentage():
     percentage_dict = {}
     for fasta in os.listdir('dataset/fasta_mut'):
         sequence = ''
-        with open(fasta, 'r') as file:
+        with open(f'dataset/fasta_mut/{fasta}', 'r') as file:
             for line in file:
                 line = line.strip()
                 if line.startswith('>'):
@@ -250,7 +259,7 @@ def percentage():
 
         percentage_dict[fasta.split('.')[0]] = perc
     
-    save_percentage(perc)
+    save_percentage(percentage_dict)
 
 
 def extract_data_wt(extract_data=False):
@@ -289,8 +298,10 @@ def extract_data_wt(extract_data=False):
 
 def extract_data_mut(extract_data_mut=False):
     if extract_data_mut:
-        fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
-        feature_extraction_mut(os.listdir('dataset/fasta_mut'))
-    
-    similarity()
-    percentage()
+        try:
+            fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
+            feature_extraction_mut(os.listdir('dataset/fasta_mut'))
+        except Exception as error:
+            print(f'There was an error: {error}')
+    else:
+        print('Data not extracted as declared')

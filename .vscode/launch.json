@@ -9,7 +9,6 @@
             "type": "python",
             "request": "launch",
             "program": "main.py",
-            "module": "GCN-for-Structure-and-Function",
             "console": "integratedTerminal",
             "justMyCode": false
         },
