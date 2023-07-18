@@ -1,15 +1,14 @@
 import os
-import json
 import pickle
 import urllib
 import requests
-import subprocess
 import numpy as np
 import pandas as pd
 import requests as r
 
 from tqdm import tqdm
 from utils.utils import save_percentage
+from src.unirep_emb import UniRep_embedding
 from sklearn.metrics.pairwise import cosine_similarity
 from Bio.PDB import MMCIFParser, PDBIO, PDBParser, PDBList
 
@@ -184,19 +183,10 @@ def feature_extraction_wt(cIDs):
             if not f'{pdb}.distmap.npy' in os.listdir('embedding/distmap_wt'):
                 os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
 
-            # Extract structural features
-            #dsspexe = '/usr/bin/dssp'
-            #strucfile = f'embedding/structural_wt/{pdb}.strucfeats.pkl'
-            #if not f'{pdb}.strucfeats.pkl' in os.listdir('embedding/structural_wt'):
-                #result = subprocess.check_output(f'python GCN-for-Structure-and-Function/scripts/get_structural_feats.py dataset/pdb/{pdb}.pdb {dsspexe} {strucfile}', shell=True)
-                #print(result)
-                #os.system(f'python GCN-for-Structure-and-Function/scripts/get_structural_feats.py dataset/pdb/{pdb}.pdb {dsspexe} {strucfile}')
-                #os.system(f'{dsspexe} dataset/pdb/{pdb}.pdb {strucfile}')
-
             # Create dictionary with all needed features
-            #output = f'embedding/results_wt/{pdb}.pkl'
-            #if not f'{pdb}.pkl' in os.listdir('embedding/results_wt'):
-                #os.system(f'python GCN-for-Structure-and-Function/scripts/generate_feats.py {pdb} {path_fasta} {path_fasta_emb} {path_pdb_emb} {output}')
+            output = f'embedding/results_wt/{pdb}.pkl'
+            if not f'{pdb}.pkl' in os.listdir('embedding/results_wt'):
+                os.system(f'python GCN-for-Structure-and-Function/scripts/generate_feats.py {pdb} {path_fasta} {path_fasta_emb} {path_pdb_emb} {output}')
     except Exception as error:
         print(f'There was an error: {error}')
 
@@ -211,7 +201,7 @@ def similarity():
             if pdb.split(':')[0] == '4jnw': # perché ha 32000 amminoacidi e ci vuole troppo, non riesce a gestirlo
                 continue
             
-            if pdb not in cos_similarity.keys():
+            if pdb_id not in cos_similarity.keys():
                 cos_similarity[pdb_id] = {}
 
             with open (f'embedding/fastaEmb_wt/{pdb_id}.embeddings.pkl', 'rb') as wild:
@@ -223,25 +213,21 @@ def similarity():
                     with open (f'embedding/fastaEmb_mut/{pdb_id}_{wt}_{pos}_{m}.embeddings.pkl', 'rb') as mt:
                         mutated = pickle.load(mt)
                     similarity_matrix = cosine_similarity(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
-                    cos_similarity[pdb_id][pdb_id + '_' + m] = [similarity_matrix]
+                    cos_similarity[pdb_id][pdb_id + '_' + wt + '_' + str(pos) + '_' + m] = [similarity_matrix]
 
-                    pearson = np.corrcoef(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
-                    cos_similarity[pdb_id][pdb_id + '_' + m].append(pearson.tolist())
+                    cos_similarity[pdb_id][pdb_id + '_' + wt + '_' + str(pos) + '_' + m].append(wildtype[list(wildtype.keys())[0]] - mutated[list(mutated.keys())[0]])
             else:
                 with open (f'embedding/fastaEmb_mut/{pdb_id}_{wt}_{pos}_{mut}.embeddings.pkl', 'rb') as mt:
                     mutated = pickle.load(mt)
                 
                 similarity_matrix = cosine_similarity(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
-                cos_similarity[pdb_id][pdb_id + '_' + mut] = [similarity_matrix]
+                cos_similarity[pdb_id][pdb_id + '_' + wt + '_' + str(pos) + '_' + mut] = [similarity_matrix]
 
-                pearson = np.corrcoef(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
-                cos_similarity[pdb_id][pdb_id + '_' + mut].append(pearson.tolist())
+                cos_similarity[pdb_id][pdb_id + '_' + wt + '_' + str(pos) + '_' + mut].append(wildtype[list(wildtype.keys())[0]] - mutated[list(mutated.keys())[0]])
         
-        with open(f'embedding/additional_features/similarity.json', 'wb') as sim:
-            json.dump(cos_similarity, sim)#, protocol=pickle.HIGHEST_PROTOCOL)
+        np.save('embedding/additional_features/similarity.npy',cos_similarity)
     except Exception as error:
-        print(f'There was an error: {error}')
-    
+        print(f'There was an error: {error} {pdb_id}')
 
 
 def percentage():
@@ -305,3 +291,21 @@ def extract_data_mut(extract_data_mut=False):
             print(f'There was an error: {error}')
     else:
         print('Data not extracted as declared')
+
+
+def features(args, folders):
+    for folder in folders:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+    extract_data_wt(args.extract_data_wt)
+    extract_data_mut(args.extract_data_mut)
+
+    if args.extract_unirep == True:
+        UniRep_embedding(os.listdir('dataset/fasta'), os.listdir('dataset/fasta_mut'))
+
+    if args.extract_similarity == True:
+        similarity()
+    if args.extract_percentage == True:
+        percentage()
+    
