@@ -158,6 +158,7 @@ dataset/pdb
 dataset/cif
 dataset/pdb_temp
 dataset/fasta_mut
+dataset/prepared
 
 # Models
 model

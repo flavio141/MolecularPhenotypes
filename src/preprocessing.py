@@ -182,11 +182,6 @@ def feature_extraction_wt(cIDs):
             path_pdb_emb = f'embedding/distmap_wt/{pdb}.distmap.npy'
             if not f'{pdb}.distmap.npy' in os.listdir('embedding/distmap_wt'):
                 os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
-
-            # Create dictionary with all needed features
-            output = f'embedding/results_wt/{pdb}.pkl'
-            if not f'{pdb}.pkl' in os.listdir('embedding/results_wt'):
-                os.system(f'python GCN-for-Structure-and-Function/scripts/generate_feats.py {pdb} {path_fasta} {path_fasta_emb} {path_pdb_emb} {output}')
     except Exception as error:
         print(f'There was an error: {error}')
 

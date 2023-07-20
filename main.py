@@ -11,7 +11,7 @@ parser.add_argument('--extract_percentage', required=False, default=False, help=
 
 folders = ['dataset/fasta', 'dataset/pdb', 'dataset/cif', 'dataset/pdb_temp',
            'dataset/fasta_mut', 'embedding/fastaEmb_mut', 'embedding/additional_features',
-           'embedding/fastaEmb_wt', 'embedding/distmap_wt', 'embedding/results_wt']
+           'embedding/fastaEmb_wt', 'embedding/distmap_wt']
 
 args = parser.parse_args()
 
