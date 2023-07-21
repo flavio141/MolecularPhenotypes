@@ -5,10 +5,10 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
-from utils.loss import LossWrapper
 from torch.utils.data import DataLoader
+from utils.metrics import matthews_coefficient
 from sklearn.model_selection import GroupKFold
-from models import NeuralNetwork, CustomMatrixDataset
+from models import NeuralNetwork, CustomMatrixDataset, LossWrapper
 from dataloader import dataset_preparation, mapping_split
 
 parser = argparse.ArgumentParser(description=('dataloader.py prepare dataset for training, validation, test'))
@@ -16,17 +16,17 @@ parser.add_argument('--prepare_data', required=False, default=False, help='Tell 
 
 args = parser.parse_args()
 
-def train_test(num_epochs, train_loader, test_loader, device):
+def train_test(num_epochs, rows, train_loader, test_loader, device):
     input_size = 1024
-    hidden_size_wt = 256
-    hidden_size_mut = 256
+    hidden_size = 256
     aggregation_dim = 64
     output_size = 15
 
-    model = NeuralNetwork(input_size, hidden_size_wt, hidden_size_mut, aggregation_dim, output_size)
+    model = NeuralNetwork(input_size, rows, hidden_size, aggregation_dim, output_size)
     model.to(device)
 
-    criterion = LossWrapper(loss= nn.BCEWithLogitsLoss, ignore_index=-999)
+    loss = nn.BCEWithLogitsLoss()
+    criterion = LossWrapper(loss=loss, ignore_index=-999)
     optimizer = optim.SGD(model.parameters(), lr=0.01)
     
     for epoch in range(num_epochs):
@@ -52,11 +52,16 @@ def train_test(num_epochs, train_loader, test_loader, device):
         with torch.no_grad():
             total_loss = 0
             for batch_X, batch_y in test_loader:
-                predictions = model(batch_X)
+                batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+
+                split_tensors = torch.split(batch_X, split_size_or_sections=1, dim=1)
+                predictions = model(split_tensors[0], split_tensors[1])
                 total_loss += criterion(predictions, batch_y).item()
 
+                matthews_coefficient(batch_y, predictions, predictions.shape[1])
+
             avg_loss = total_loss / len(test_loader)
-            print(f"Epoch [{epoch+1}/{num_epochs}], Test Loss: {avg_loss:.4f}")
+            print(f"Epoch {epoch+1}/{num_epochs}, Test Loss: {avg_loss:.4f}")
 
 
 def main_train(device):
@@ -84,7 +89,7 @@ def main_train(device):
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=batch_size)
         print('-----------------Start Training------------------')
-        train_test(200, train_loader, test_loader, device)
+        train_test(200, X.shape[2], train_loader, test_loader, device)
 
 
 if __name__ == "__main__":
