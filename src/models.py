@@ -4,28 +4,31 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 class NeuralNetwork(nn.Module):
-    def __init__(self, input_dim, rows, hidden_dim, aggregation_dim, output):
+    def __init__(self, input_dim, rows, output):
         super(NeuralNetwork, self).__init__()
         self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.aggregation_dim = aggregation_dim
         self.output = output
         
         # Layers
-        self.fc1_wt = nn.Linear(self.input_dim, self.hidden_dim)
-        self.fc1_mut = nn.Linear(self.input_dim, self.hidden_dim)
-        self.aggregation_layer = nn.Linear(self.hidden_dim * 2, self.aggregation_dim)
-        self.fc2 = nn.Linear(self.aggregation_dim * rows, self.output)
+        self.fc1_wt = nn.Linear(self.input_dim, 256)
+        self.fc1_mut = nn.Linear(self.input_dim, 256)
+        self.aggregation_layer = nn.Linear(256 * 2, 128)
+        self.fc2 = nn.Linear(128 * rows, 256)
+        self.fc3 = nn.Linear(256, 128)
+        self.fc4 = nn.Linear(128, self.output)
+
 
     def forward(self, x_wt, x_mut):
-        out_wt = F.relu(self.fc1_wt(x_wt))
-        out_mut = F.relu(self.fc1_mut(x_mut))
+        out_wt = F.leaky_relu(self.fc1_wt(x_wt))
+        out_mut = F.leaky_relu(self.fc1_mut(x_mut))
         
         combined_output = torch.cat((out_wt, out_mut), dim=3)
         combined_output = combined_output.reshape(combined_output.shape[0], combined_output.shape[2], combined_output.shape[3])
-        aggregated_output = F.relu(self.aggregation_layer(combined_output))
+        aggregated_output = F.leaky_relu(self.aggregation_layer(combined_output))
         
-        output = self.fc2(aggregated_output.reshape(aggregated_output.shape[0], -1))
+        out_fc2 = self.fc2(aggregated_output.reshape(aggregated_output.shape[0], -1))
+        out_fc3 = F.leaky_relu(self.fc3(out_fc2))
+        output = F.leaky_relu(self.fc4(out_fc3))
         return output
     
 
