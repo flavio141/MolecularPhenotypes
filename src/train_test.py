@@ -7,7 +7,7 @@ import torch.optim as optim
 
 from torch.utils.data import DataLoader
 from sklearn.model_selection import GroupKFold
-from metrics import custom_metrics
+from metrics import custom_metrics, save_metrics
 from models import NeuralNetwork, CustomMatrixDataset, LossWrapper
 from dataloader import dataset_preparation, mapping_split
 
@@ -20,12 +20,12 @@ def train_test(num_epochs, rows, train_loader, test_loader, device):
     input_size = 1024
     output_size = 15
 
-    model = NeuralNetwork(input_size, rows, output_size)
+    model = NeuralNetwork(input_size, rows, output_size, l2_lambda=0.01)
     model.to(device)
 
     loss = nn.BCEWithLogitsLoss()
     criterion = LossWrapper(loss=loss, ignore_index=-999)
-    optimizer = optim.SGD(model.parameters(), lr=0.01)
+    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=model.l2_lambda)
     
     for epoch in range(num_epochs):
         running_loss = 0.0
@@ -57,12 +57,14 @@ def train_test(num_epochs, rows, train_loader, test_loader, device):
             metrics["spec"].append(spec)
             metrics["f1_score"].append(f1_score)
 
+            #save_metrics(metrics, 'train')
+
         print(f"Epoch: {epoch+1}/{num_epochs}, Loss: {running_loss}, Matthews Mean: {np.mean(metrics['mcc'])}, Precision Mean: {np.mean(metrics['prec'])}, Recall Mean: {np.mean(metrics['rec'])}, Specificity: {np.mean(metrics['spec'])}, Balanced Accuracy: {np.mean(metrics['balanced_acc'])}, F1 Score Mean: {np.mean(metrics['f1_score'])}")
 
     model.eval()
     with torch.no_grad():
         total_loss = 0
-        metrics = {"mcc": [], "prec": [], "rec": [], "spec": [], "balanced_acc": [], "f1_score": []}
+        metrics = {"mcc": [], "spec": [], "balanced_acc": []}
 
         for batch_X, batch_y in test_loader:
             batch_X, batch_y = batch_X.to(device), batch_y.to(device)
@@ -77,11 +79,10 @@ def train_test(num_epochs, rows, train_loader, test_loader, device):
             y_true_masked = torch.masked_select(batch_y, ignore_indices)
             mcc, prec, rec, spec, balanced_acc, f1_score = custom_metrics(y_pred_masked, y_true_masked)
             metrics["mcc"].append(mcc)
-            metrics["prec"].append(prec)
-            metrics["rec"].append(rec)
             metrics["balanced_acc"].append(balanced_acc)
             metrics["spec"].append(spec)
-            metrics["f1_score"].append(f1_score)
+
+            #save_metrics(metrics, 'test')
         
         
         ignore_indices = (batch_y != -999)
@@ -90,7 +91,7 @@ def train_test(num_epochs, rows, train_loader, test_loader, device):
         y_true_masked = torch.masked_select(batch_y, ignore_indices)
 
         avg_loss = total_loss / len(test_loader)
-        print(f"Test Loss: {avg_loss:.4f}, Matthews Test Mean: {np.mean(metrics['mcc'])}, Precision Test Mean: {np.mean(metrics['prec'])}, Recall Test Mean: {np.mean(metrics['rec'])}, Specificity: {np.mean(metrics['spec'])}, Balanced Accuracy: {np.mean(metrics['balanced_acc'])}, F1 Score Test Mean: {np.mean(metrics['f1_score'])}")
+        print(f"Test Loss: {avg_loss:.4f}, Matthews Test Mean: {np.mean(metrics['mcc'])}, Specificity: {np.mean(metrics['spec'])}, Balanced Accuracy: {np.mean(metrics['balanced_acc'])}")
         print('\n')
 
 
@@ -121,7 +122,7 @@ def main_train(device):
         test_loader = DataLoader(test_dataset, batch_size=batch_size)
         print(f'-----------------Start Training Group {group}------------------')
         group += 1
-        train_test(50, X.shape[2], train_loader, test_loader, device)
+        train_test(20, X.shape[2], train_loader, test_loader, device)
 
 
 if __name__ == "__main__":

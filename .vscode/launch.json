@@ -13,12 +13,11 @@
             "justMyCode": false
         },
         {
-            "name": "Python: Structural",
+            "name": "Python: Training",
             "type": "python",
             "request": "launch",
-            "program": "GCN-for-Structure-and-Function/scripts/get_structural_feats.py",
+            "program": "src/train_test.py",
             "console": "integratedTerminal",
-            "args": ["dataset/pdb/1a9n_C.pdb", "/usr/bin/dssp", "embedding/structural_wt/1a9n_C.strucfeats.pkl"],
             "justMyCode": false
         },
         {
