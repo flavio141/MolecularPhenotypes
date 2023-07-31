@@ -1,6 +1,7 @@
-import os
 import torch
-import openpyxl
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score, roc_curve
+
 
 def custom_metrics(y_true, y_pred):
     true_positives = torch.logical_and(y_true == 1., y_pred == 1.).sum().item()
@@ -25,59 +26,70 @@ def custom_metrics(y_true, y_pred):
     return mcc, prec, rec, spec, balanced_acc, f1_score
 
 
-def save_metrics(results, process=None):
-    mapping = {"mcc": 2, "balanced_acc": 3, "spec": 4, "prec": 5, "rec": 6, "f1_score": 7}
+def label_metrics(y_true, y_pred):
+    spec_per_column = []
+    balanced_per_column = []
+    matthews_per_column = []
 
-    if process == 'train':
-        if not os.path.exists('results/training_test.xlsx'):
-            wb = openpyxl.Workbook()
-            sheet = wb.active
-            sheet.title = "Train"
+    y_true_processed = y_true.clone()
+    y_true_processed[y_true_processed == -999] = float('nan')
 
-            sheet["A1"] = "Epoch"
-            sheet["B1"] = "Matthews Coefficient"
-            sheet["C1"] = "Balanced Accuracy"
-            sheet["D1"] = "Specificity"
-            sheet["E1"] = "Precision"
-            sheet["F1"] = "Recall"
-            sheet["G1"] = "F1 Score"
-
-            for keys, subkeys in results.items():
-                row = 2
-                column = mapping[keys]
-                for item in subkeys:
-                    sheet.cell(row=row, column=column, value=item)
-                    row += 1
-
-            wb.save("results/training_test.xlsx")
-        else:
-            wb = openpyxl.load_workbook('results/training_test.xlsx')
-            sheet = wb["Train"]
-
-            for keys, subkeys in results.items():
-                row = sheet.max_row + 1
-                column = mapping[keys]
-                for item in subkeys:
-                    sheet.cell(row=row, column=column, value=item)
-                    row += 1
-            
-            wb.save("results/training_test.xlsx")
-            wb.close()
-
-    elif process == 'test':
-        wb = openpyxl.load_workbook('results/training_test.xlsx')
-        sheet = wb["Test"]
-
-        sheet["A1"] = "Matthews Coefficient"
-        sheet["B1"] = "Balanced Accuracy"
-        sheet["C1"] = "Specificity"
-
-        for keys, subkeys in results.items():
-            row = sheet.max_row + 1
-            column = mapping[keys]
-            for item in subkeys:
-                sheet.cell(row=row, column=column, value=item)
-                row += 1
+    for col in range(y_true_processed.size(1)):
+        label_column = y_true_processed[:, col]
+        pred_column = y_pred[:, col]
         
-        wb.save("results/training_test.xlsx")
-        wb.close()
+        valid_indices = ~torch.isnan(label_column)
+        pred_column = pred_column[valid_indices]
+        label_column = label_column[valid_indices]
+
+        if len(pred_column) > 0:
+            mcc, _, _, spec, balanced_acc, _ = custom_metrics(label_column, pred_column)
+
+            spec_per_column.append(torch.tensor(spec))
+            balanced_per_column.append(torch.tensor(balanced_acc))
+            matthews_per_column.append(torch.tensor(mcc))
+
+        else:
+            spec_per_column.append(torch.tensor(float('nan')))
+            balanced_per_column.append(torch.tensor(float('nan')))
+            matthews_per_column.append(torch.tensor(float('nan')))
+
+    return torch.stack(spec_per_column), torch.stack(balanced_per_column), torch.stack(matthews_per_column)
+
+
+def train_metrics(metrics, mcc, prec, rec, spec, balanced_acc, f1_score):
+    metrics["mcc"].append(mcc)
+    metrics["prec"].append(prec)
+    metrics["rec"].append(rec)
+    metrics["balanced_acc"].append(balanced_acc)
+    metrics["spec"].append(spec)
+    metrics["f1_score"].append(f1_score)
+
+    return metrics
+
+
+def save_bac(num_epochs, train_acc, test_acc, group):
+    plt.plot(range(num_epochs), train_acc, label='Train Balanced Accuracy', color='blue')
+    plt.plot(range(num_epochs), test_acc, label='Test Balanced Accuracy', color='red')
+
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.title('Balanced Accuracy - Train vs. Test')
+    plt.legend()
+    plt.show()
+    plt.savefig(f'plots/train_vs_test_{group}.png')
+    plt.clf()
+    plt.close()
+
+def save_auc(num_epochs, auc, auc_test, group):
+    plt.plot(range(num_epochs), auc, label='Train AUC', color='blue')
+    plt.plot(range(num_epochs), auc_test, label='Test AUC', color='red')
+
+    plt.xlabel('Epochs')
+    plt.ylabel('AUC')
+    plt.title('AUC per Epochs - Train vs. Test')
+    plt.legend()
+    plt.show()
+    plt.savefig(f'plots/AUCTrain_vs_AUCTest_{group}.png')
+    plt.clf()
+    plt.close()

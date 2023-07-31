@@ -5,8 +5,9 @@ import pandas as pd
 from tqdm import tqdm
 
 data = pd.read_csv('dataset/database.tsv', sep='\t')
+difference = True
 
-def extract_rows_around_position(matrix, row_index, num_rows_to_extract=25):
+def extract_rows_around_position(matrix, row_index, num_rows_to_extract=3):
     num_rows, num_cols = matrix.shape
     rows_before = min(row_index, num_rows_to_extract)
     rows_after = min(num_rows - row_index - 1, num_rows_to_extract)
@@ -52,8 +53,14 @@ def dataset_preparation():
                                           (data['mutation'].str.contains(values[4].split('.')[0])) & 
                                           (data['position'] == int(values[3]))].values))[0]
         
+        if difference:
+            wildtype_mutated.append((features_wt - features_mut))
+            if np.any(np.isnan((features_wt - features_mut))):
+                print(information)
+        else:
+            wildtype_mutated.append(matrix_tuple)
+        
         protein_to_mut.append((information[0], mutated.split('.')[0]))
-        wildtype_mutated.append(matrix_tuple)
         labels.append(np.nan_to_num(np.abs(information[-15:]), nan=-999))
 
     assert len(protein_to_mut) == len(wildtype_mutated) == len(labels)

@@ -5,40 +5,61 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
+from torchmetrics import AUROC
 from torch.utils.data import DataLoader
+from focal_loss.focal_loss import FocalLoss
 from sklearn.model_selection import GroupKFold
-from metrics import custom_metrics, save_metrics
-from models import NeuralNetwork, CustomMatrixDataset, LossWrapper
+from metrics import custom_metrics, train_metrics, label_metrics, save_auc, save_bac
+from models import NeuralNetwork, CustomMatrixDataset, LossWrapper, TRAM, TRAM_Att, TRAM_Att_solo, NN2, NN3
 from dataloader import dataset_preparation, mapping_split
 
 parser = argparse.ArgumentParser(description=('dataloader.py prepare dataset for training, validation, test'))
 parser.add_argument('--prepare_data', required=False, default=False, help='Tell if necessary to extract files for dataset creation')
 
 args = parser.parse_args()
+global_metrics = True
+difference = True
 
-def train_test(num_epochs, rows, train_loader, test_loader, device):
+
+def train_test(num_epochs, rows, train_loader, test_loader, device, group):
     input_size = 1024
     output_size = 15
 
-    model = NeuralNetwork(input_size, rows, output_size, l2_lambda=0.01)
+    model = NN2(input_size, rows, output_size)
     model.to(device)
 
-    loss = nn.BCEWithLogitsLoss()
+    loss = FocalLoss(gamma=2)
     criterion = LossWrapper(loss=loss, ignore_index=-999)
-    optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=model.l2_lambda)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001)#, weight_decay=0.1)
     
+
+    train_acc = []
+    test_acc = []
+    auc = []
+    auc_test = []
+    auroc = AUROC(task='binary', ignore_index=-999)
+
     for epoch in range(num_epochs):
         running_loss = 0.0
-        metrics = {"mcc": [], "prec": [], "rec": [], "spec": [], "balanced_acc": [], "f1_score": []}
+        metrics = {"mcc": [], "prec": [], "rec": [], "spec": [], "balanced_acc": [], "f1_score": [], "auc": []}
 
         model.train()
         for inputs, labels in train_loader:
             optimizer.zero_grad()
             inputs, labels = inputs.to(device), labels.to(device) 
+
+            if difference:
+                outputs = model(inputs)
+            else:
+                split_tensors = torch.split(inputs, split_size_or_sections=1, dim=1)
+                outputs = model(split_tensors[0], split_tensors[1])
             
-            split_tensors = torch.split(inputs, split_size_or_sections=1, dim=1)
-            outputs = model(split_tensors[0], split_tensors[1])
-            loss = criterion(outputs, labels)
+            m = nn.Sigmoid()
+            try:
+                loss = criterion(m(outputs), labels.long())
+            except Exception as error:
+                print('TRAIN')
+                print(f'{error} and {inputs}')
             
             loss.backward()
             optimizer.step()
@@ -46,53 +67,83 @@ def train_test(num_epochs, rows, train_loader, test_loader, device):
             running_loss += loss.item()
 
             ignore_indices = (labels != -999)
-            y_pred = (torch.sigmoid(outputs) > 0.5).float()
-            y_pred_masked = torch.masked_select(y_pred, ignore_indices)
-            y_true_masked = torch.masked_select(labels, ignore_indices)
-            mcc, prec, rec, spec, balanced_acc, f1_score = custom_metrics(y_pred_masked, y_true_masked)
-            metrics["mcc"].append(mcc)
-            metrics["prec"].append(prec)
-            metrics["rec"].append(rec)
-            metrics["balanced_acc"].append(balanced_acc)
-            metrics["spec"].append(spec)
-            metrics["f1_score"].append(f1_score)
+            y_pred = (torch.sigmoid(outputs) > 0.5).float()            
+            
+            if global_metrics:
+                metrics["auc"].append(auroc(torch.sigmoid(outputs), labels).item())
 
-            #save_metrics(metrics, 'train')
+                y_pred_masked = torch.masked_select(y_pred, ignore_indices)
+                y_true_masked = torch.masked_select(labels, ignore_indices)
+                mcc, prec, rec, spec, balanced_acc, f1_score = custom_metrics(y_true_masked, y_pred_masked)
+                metrics = train_metrics(metrics, mcc, prec, rec, spec, balanced_acc, f1_score)
+            else:
+                spec, balanced, mcc = label_metrics(labels, y_pred)
+                metrics["spec"].append(spec)
+                metrics["balanced_acc"].append(balanced)
+                metrics["mcc"].append(mcc)
 
-        print(f"Epoch: {epoch+1}/{num_epochs}, Loss: {running_loss}, Matthews Mean: {np.mean(metrics['mcc'])}, Precision Mean: {np.mean(metrics['prec'])}, Recall Mean: {np.mean(metrics['rec'])}, Specificity: {np.mean(metrics['spec'])}, Balanced Accuracy: {np.mean(metrics['balanced_acc'])}, F1 Score Mean: {np.mean(metrics['f1_score'])}")
+        if global_metrics:
+            print(f"Epoch: {epoch+1}/{num_epochs}, Loss: {running_loss}, Matthews Mean: {np.mean(metrics['mcc'])}, Precision Mean: {np.mean(metrics['prec'])}, Recall Mean: {np.mean(metrics['rec'])}, Specificity: {np.mean(metrics['spec'])}, Balanced Accuracy: {np.mean(metrics['balanced_acc'])}, F1 Score Mean: {np.mean(metrics['f1_score'])}")
+        else:
+            print(f"Epoch: {epoch+1}/{num_epochs}, Loss: {running_loss}, Matthews Mean: {torch.nanmean(torch.stack(metrics['mcc']), dim=0)}, Specificity Mean: {torch.nanmean(torch.stack(metrics['spec']), dim=0)}, Balanced Accuracy Mean: {torch.nanmean(torch.stack(metrics['balanced_acc']), dim=0)}")
 
-    model.eval()
-    with torch.no_grad():
-        total_loss = 0
-        metrics = {"mcc": [], "spec": [], "balanced_acc": []}
+        auc.append(np.mean(metrics["auc"]))
+        train_acc.append(np.mean(metrics['balanced_acc']))
 
-        for batch_X, batch_y in test_loader:
-            batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+        model.eval()
 
-            split_tensors = torch.split(batch_X, split_size_or_sections=1, dim=1)
-            predictions = model(split_tensors[0], split_tensors[1])
-            total_loss += criterion(predictions, batch_y).item()
+        with torch.no_grad():
+            total_loss = 0
+            metrics = {"mcc": [], "spec": [], "balanced_acc": [], "auc": []}
 
-            ignore_indices = (batch_y != -999)
-            y_pred = (torch.sigmoid(predictions) > 0.5).float()
-            y_pred_masked = torch.masked_select(y_pred, ignore_indices)
-            y_true_masked = torch.masked_select(batch_y, ignore_indices)
-            mcc, prec, rec, spec, balanced_acc, f1_score = custom_metrics(y_pred_masked, y_true_masked)
-            metrics["mcc"].append(mcc)
-            metrics["balanced_acc"].append(balanced_acc)
-            metrics["spec"].append(spec)
+            for batch_X, batch_y in test_loader:
+                batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+                
+                if difference:
+                    predictions = model(batch_X)
+                else:
+                    split_tensors = torch.split(batch_X, split_size_or_sections=1, dim=1)
+                    predictions = model(split_tensors[0], split_tensors[1])
+                
+                m = nn.Sigmoid()
+                try:
+                    total_loss += criterion(m(predictions), batch_y.long()).item()
+                except Exception as error:
+                    print('TEST')
+                    print(f'{error} and {batch_X}')
 
-            #save_metrics(metrics, 'test')
+                ignore_indices = (batch_y != -999)
+                y_pred = (torch.sigmoid(predictions) > 0.5).float()
+                
+                if global_metrics:
+                    metrics["auc"].append(auroc(torch.sigmoid(predictions), batch_y).item())
+
+                    y_pred_masked = torch.masked_select(y_pred, ignore_indices)
+                    y_true_masked = torch.masked_select(batch_y, ignore_indices)
+                    mcc, prec, rec, spec, balanced_acc, f1_score = custom_metrics(y_true_masked, y_pred_masked)
+                    metrics["mcc"].append(mcc)
+                    metrics["balanced_acc"].append(balanced_acc)
+                    metrics["spec"].append(spec)
+                else:
+                    spec, balanced, mcc = label_metrics(batch_y, y_pred)
+                    metrics["spec"].append(spec)
+                    metrics["balanced_acc"].append(balanced)
+                    metrics["mcc"].append(mcc)
+
+            avg_loss = total_loss / len(test_loader)
+            
+            if global_metrics:
+                print(f"Test Loss: {avg_loss:.4f}, Matthews Test Mean: {np.mean(metrics['mcc'])}, Specificity: {np.mean(metrics['spec'])}, Balanced Accuracy: {np.mean(metrics['balanced_acc'])}")
+                print('\n')
+            else:           
+                print(f"Test Loss: {avg_loss:.4f}, Matthews Mean: {torch.nanmean(torch.stack(metrics['mcc']), dim=0)}, Specificity Mean: {torch.nanmean(torch.stack(metrics['spec']), dim=0)}, Balanced Accuracy Mean: {torch.nanmean(torch.stack(metrics['balanced_acc']), dim=0)}")
+                print('\n')
         
-        
-        ignore_indices = (batch_y != -999)
-        y_pred = (torch.sigmoid(predictions) > 0.5).float()
-        y_pred_masked = torch.masked_select(y_pred, ignore_indices)
-        y_true_masked = torch.masked_select(batch_y, ignore_indices)
+        auc_test.append(np.mean(metrics['auc']))
+        test_acc.append(np.mean(metrics['balanced_acc']))
 
-        avg_loss = total_loss / len(test_loader)
-        print(f"Test Loss: {avg_loss:.4f}, Matthews Test Mean: {np.mean(metrics['mcc'])}, Specificity: {np.mean(metrics['spec'])}, Balanced Accuracy: {np.mean(metrics['balanced_acc'])}")
-        print('\n')
+    save_bac(num_epochs, train_acc, test_acc, group)
+    save_auc(num_epochs, auc, auc_test, group)
 
 
 def main_train(device):
@@ -117,12 +168,12 @@ def main_train(device):
         train_dataset = CustomMatrixDataset(X_train, y_train)
         test_dataset = CustomMatrixDataset(X_test, y_test)
 
-        batch_size = 32
+        batch_size = 30
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=batch_size)
         print(f'-----------------Start Training Group {group}------------------')
+        train_test(300, X.shape[1], train_loader, test_loader, device, group)
         group += 1
-        train_test(20, X.shape[2], train_loader, test_loader, device)
 
 
 if __name__ == "__main__":
