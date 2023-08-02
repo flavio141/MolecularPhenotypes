@@ -5,7 +5,6 @@ import pandas as pd
 from tqdm import tqdm
 
 data = pd.read_csv('dataset/database.tsv', sep='\t')
-difference = True
 
 def extract_rows_around_position(matrix, row_index, num_rows_to_extract=3):
     num_rows, num_cols = matrix.shape
@@ -30,7 +29,7 @@ def extract_rows_around_position(matrix, row_index, num_rows_to_extract=3):
     return result_matrix
 
 
-def dataset_preparation():
+def dataset_preparation(difference):
     wildtype_mutated = []
     protein_to_mut = []
     labels = []
@@ -55,8 +54,6 @@ def dataset_preparation():
         
         if difference:
             wildtype_mutated.append((features_wt - features_mut))
-            if np.any(np.isnan((features_wt - features_mut))):
-                print(information)
         else:
             wildtype_mutated.append(matrix_tuple)
         

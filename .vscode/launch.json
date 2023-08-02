@@ -18,6 +18,7 @@
             "request": "launch",
             "program": "src/train_test.py",
             "console": "integratedTerminal",
+            "args": ["--difference=True"],
             "justMyCode": false
         },
         {
