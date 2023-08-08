@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 data = pd.read_csv('dataset/database.tsv', sep='\t')
 
-def extract_rows_around_position(matrix, row_index, num_rows_to_extract=3):
+def extract_rows_around_position(matrix, row_index, num_rows_to_extract=5):
     num_rows, num_cols = matrix.shape
     rows_before = min(row_index, num_rows_to_extract)
     rows_after = min(num_rows - row_index - 1, num_rows_to_extract)

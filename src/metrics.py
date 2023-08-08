@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 import openpyxl as xl
 import matplotlib.pyplot as plt
 from torchmetrics import AUROC
@@ -90,8 +89,26 @@ def save_bac(num_epochs, train_acc, test_acc, group, global_metric):
         plt.show()
         plt.savefig(f'plots/train_vs_test_{group}.png')
 
-    plt.clf()
-    plt.close()
+        plt.clf()
+        plt.close()
+    
+    else:
+        wb = xl.Workbook()
+        ws = wb.active
+        ws.append([f'Label AUC: {label}'for label in range(15)])
+
+        for train in train_acc:
+            ws.append(train.tolist())
+
+        ws.append([])
+        ws.append([f'Label Test AUC: {label}'for label in range(15)])
+
+        for test in test_acc:
+            ws.append(test.tolist())
+        
+        wb.save(f'results/Fold{group}_BAC_Results.xlsx')
+        wb.close()
+
 
 def save_auc(num_epochs, auc_train, auc_test, group, global_metrics):
     if global_metrics:
@@ -121,5 +138,5 @@ def save_auc(num_epochs, auc_train, auc_test, group, global_metrics):
         for test in auc_test:
             ws.append(test.tolist())
         
-        wb.save(f'results/Fold{group}_Results.xlsx')
+        wb.save(f'results/Fold{group}_AUC_Results.xlsx')
         wb.close()

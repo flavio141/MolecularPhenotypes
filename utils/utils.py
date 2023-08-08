@@ -15,4 +15,3 @@ def save_percentage(perc):
         row += 1
 
     wb.save("embedding/additional_features/percentage.xlsx")
-

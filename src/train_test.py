@@ -5,6 +5,7 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
+from utils import one_hot_aminoacids
 from torch.utils.data import DataLoader
 from focal_loss.focal_loss import FocalLoss
 from sklearn.model_selection import GroupKFold
@@ -18,7 +19,7 @@ parser.add_argument('--metrics', required=False, default=True, help='Tell if nec
 parser.add_argument('--difference', required=True, default=True, help='Tell if necessary to extract metrics')
 
 args = parser.parse_args()
-global_metrics = False
+global_metrics = True
 difference = True
 
 
@@ -31,7 +32,7 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
 
     loss = FocalLoss(gamma=2)
     criterion = LossWrapper(loss=loss, ignore_index=-999)
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = optim.Adam(model.parameters(), lr=0.00001, weight_decay=0.001)
     
     train_acc, test_acc, auc_train, auc_test = [], [], [], []
 
@@ -40,12 +41,22 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
         metrics = {"mcc": [], "prec": [], "rec": [], "spec": [], "balanced_acc": [], "f1_score": [], "auc": []}
 
         model.train()
-        for inputs, labels in train_loader:
+        for inputs, labels, indices in train_loader:
             optimizer.zero_grad()
             inputs, labels = inputs.to(device), labels.to(device) 
 
             if difference:
-                outputs = model(inputs)
+                tensor_one_hot = []
+
+                for mapping in indices:
+                    mutation = mapping.split('_')[-1]
+                    wildtype = mapping.split('_')[2]
+                    one_hot = one_hot_aminoacids(wildtype=wildtype, mutation=mutation)
+                    tensor_one_hot.append(one_hot)
+
+                tensor_one_hot = torch.stack(tensor_one_hot, dim=0)
+                tensor_one_hot = tensor_one_hot.to(device)
+                outputs = model(inputs, tensor_one_hot)
             else:
                 split_tensors = torch.split(inputs, split_size_or_sections=1, dim=1)
                 outputs = model(split_tensors[0], split_tensors[1])
@@ -90,13 +101,23 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
 
         with torch.no_grad():
             total_loss = 0
-            metrics = {"mcc": [], "spec": [], "balanced_acc": [], "auc": []}
+            metrics_test = {"mcc": [], "prec": [], "rec": [], "spec": [], "balanced_acc": [], "f1_score": [], "auc": []}
 
-            for batch_X, batch_y in test_loader:
+            for batch_X, batch_y, batch_indices in test_loader:
                 batch_X, batch_y = batch_X.to(device), batch_y.to(device)
                 
                 if difference:
-                    predictions = model(batch_X)
+                    tensor_one_hot = []
+
+                    for mapping in batch_indices:
+                        mutation = mapping.split('_')[-1]
+                        wildtype = mapping.split('_')[2]
+                        one_hot = one_hot_aminoacids(wildtype=wildtype, mutation=mutation)
+                        tensor_one_hot.append(one_hot)
+
+                    tensor_one_hot = torch.stack(tensor_one_hot, dim=0)
+                    tensor_one_hot = tensor_one_hot.to(device)
+                    predictions = model(batch_X, tensor_one_hot)
                 else:
                     split_tensors = torch.split(batch_X, split_size_or_sections=1, dim=1)
                     predictions = model(split_tensors[0], split_tensors[1])
@@ -115,25 +136,25 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
                     y_pred_masked = torch.masked_select(y_pred, ignore_indices)
                     y_true_masked = torch.masked_select(batch_y, ignore_indices)
                     mcc, prec, rec, spec, balanced_acc, f1_score, auc = custom_metrics(y_true_masked, y_pred_masked, predictions, batch_y)
-                    metrics = train_metrics(metrics, mcc, prec, rec, spec, balanced_acc, f1_score, auc)
+                    metrics_test = train_metrics(metrics_test, mcc, prec, rec, spec, balanced_acc, f1_score, auc)
                 else:
                     spec, balanced, mcc, auc = label_metrics(batch_y, y_pred)
-                    metrics["spec"].append(spec)
-                    metrics["balanced_acc"].append(balanced)
-                    metrics["mcc"].append(mcc)
-                    metrics["auc"].append(auc)
+                    metrics_test["spec"].append(spec)
+                    metrics_test["balanced_acc"].append(balanced)
+                    metrics_test["mcc"].append(mcc)
+                    metrics_test["auc"].append(auc)
 
             avg_loss = total_loss / len(test_loader)
             
             if global_metrics:
-                print(f"Test Loss: {avg_loss:.4f}, Matthews Test Mean: {np.mean(metrics['mcc'])}, Specificity: {np.mean(metrics['spec'])}, Balanced Accuracy: {np.mean(metrics['balanced_acc'])}")
-                auc_test.append(np.mean(metrics['auc']))
-                test_acc.append(np.mean(metrics['balanced_acc']))
+                print(f"Test Loss: {avg_loss:.4f}, Matthews Test Mean: {np.mean(metrics_test['mcc'])}, Specificity: {np.mean(metrics_test['spec'])}, Balanced Accuracy: {np.mean(metrics_test['balanced_acc'])}")
+                auc_test.append(np.mean(metrics_test['auc']))
+                test_acc.append(np.mean(metrics_test['balanced_acc']))
                 print('\n')
             else:           
                 print(f"Test Loss: {avg_loss:.4f}, AUC: {torch.nanmean(torch.stack(metrics['auc']), dim=0).tolist()}")
-                auc_test.append(torch.nanmean(torch.stack(metrics["auc"]), dim=0))
-                test_acc.append(torch.nanmean(torch.stack(metrics["balanced_acc"]), dim=0))
+                auc_test.append(torch.nanmean(torch.stack(metrics_test["auc"]), dim=0))
+                test_acc.append(torch.nanmean(torch.stack(metrics_test["balanced_acc"]), dim=0))
                 print('\n')
 
     #save_bac(num_epochs, train_acc, test_acc, group)
@@ -162,15 +183,16 @@ def main_train(device):
     for train_index, test_index in group_kfold.split(X, y, groups=IDs):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
+        train_indices, test_indices = mapping[train_index][:,1], mapping[test_index][:,1]
 
-        train_dataset = CustomMatrixDataset(X_train, y_train)
-        test_dataset = CustomMatrixDataset(X_test, y_test)
+        train_dataset = CustomMatrixDataset(X_train, y_train, train_indices)
+        test_dataset = CustomMatrixDataset(X_test, y_test, test_indices)
 
-        batch_size = 10
+        batch_size = 50
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=batch_size)
         print(f'-----------------Start Training Group {group}------------------')
-        train_test(10, X.shape, train_loader, test_loader, device, group)
+        train_test(200, X.shape, train_loader, test_loader, device, group)
         group += 1
 
 
