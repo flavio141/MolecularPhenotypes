@@ -159,6 +159,7 @@ dataset/cif
 dataset/pdb_temp
 dataset/fasta_mut
 dataset/prepared
+dataset/HPMPdb
 
 # Models
 model

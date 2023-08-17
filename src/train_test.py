@@ -5,22 +5,25 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
-from utils import one_hot_aminoacids
+from utility import one_hot_aminoacids
 from torch.utils.data import DataLoader
 from focal_loss.focal_loss import FocalLoss
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import GroupKFold, StratifiedKFold
 from metrics import custom_metrics, train_metrics, label_metrics, save_auc, save_bac
-from models import NeuralNetwork, CustomMatrixDataset, LossWrapper, TRAM, TRAM_Att, TRAM_Att_solo, NN2, NN3
+from models import NeuralNetwork, CustomMatrixDataset, MatrixDataset, LossWrapper, TRAM, TRAM_Att, TRAM_Att_solo, NN1, NN2, NN3
 from dataloader import dataset_preparation, mapping_split
+from paper import train_test_paper
 
 parser = argparse.ArgumentParser(description=('dataloader.py prepare dataset for training, validation, test'))
 parser.add_argument('--prepare_data', required=False, default=False, help='Tell if necessary to extract files for dataset creation')
 parser.add_argument('--metrics', required=False, default=True, help='Tell if necessary to extract metrics')
 parser.add_argument('--difference', required=True, default=True, help='Tell if necessary to extract metrics')
+parser.add_argument('--trials', required=True, default=0, help='Tell which trials you are performing')
+parser.add_argument('--epochs', required=False, default=200, help='Tell how many epochs you need to do')
+parser.add_argument('--global_metrics', required=True, default=True, help='Tell how many epochs you need to do')
+parser.add_argument('--fold_mapping', required=True, default=False, help='Tell how many epochs you need to do')
 
 args = parser.parse_args()
-global_metrics = True
-difference = True
 
 
 def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
@@ -45,7 +48,7 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
             optimizer.zero_grad()
             inputs, labels = inputs.to(device), labels.to(device) 
 
-            if difference:
+            if args.difference == True:
                 tensor_one_hot = []
 
                 for mapping in indices:
@@ -76,7 +79,7 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
             ignore_indices = (labels != -999)
             y_pred = (torch.sigmoid(outputs) > 0.5).float()            
 
-            if global_metrics:
+            if args.global_metrics == True:
                 y_pred_masked = torch.masked_select(y_pred, ignore_indices)
                 y_true_masked = torch.masked_select(labels, ignore_indices)
                 mcc, prec, rec, spec, balanced_acc, f1_score, auc = custom_metrics(y_true_masked, y_pred_masked, outputs, labels)
@@ -88,7 +91,7 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
                 metrics["mcc"].append(mcc)
                 metrics["auc"].append(auc)
 
-        if global_metrics:
+        if args.global_metrics == True:
             print(f"Epoch: {epoch+1}/{num_epochs}, Loss: {running_loss}, Matthews Mean: {np.mean(metrics['mcc'])}, Precision Mean: {np.mean(metrics['prec'])}, Recall Mean: {np.mean(metrics['rec'])}, Specificity: {np.mean(metrics['spec'])}, Balanced Accuracy: {np.mean(metrics['balanced_acc'])}, F1 Score Mean: {np.mean(metrics['f1_score'])}")
             auc_train.append(np.mean(metrics["auc"]))
             train_acc.append(np.mean(metrics['balanced_acc']))
@@ -106,7 +109,7 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
             for batch_X, batch_y, batch_indices in test_loader:
                 batch_X, batch_y = batch_X.to(device), batch_y.to(device)
                 
-                if difference:
+                if args.difference == True:
                     tensor_one_hot = []
 
                     for mapping in batch_indices:
@@ -132,7 +135,7 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
                 ignore_indices = (batch_y != -999)
                 y_pred = (torch.sigmoid(predictions) > 0.5).float()
                 
-                if global_metrics:
+                if args.global_metrics == True:
                     y_pred_masked = torch.masked_select(y_pred, ignore_indices)
                     y_true_masked = torch.masked_select(batch_y, ignore_indices)
                     mcc, prec, rec, spec, balanced_acc, f1_score, auc = custom_metrics(y_true_masked, y_pred_masked, predictions, batch_y)
@@ -146,7 +149,7 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
 
             avg_loss = total_loss / len(test_loader)
             
-            if global_metrics:
+            if args.global_metrics == True:
                 print(f"Test Loss: {avg_loss:.4f}, Matthews Test Mean: {np.mean(metrics_test['mcc'])}, Specificity: {np.mean(metrics_test['spec'])}, Balanced Accuracy: {np.mean(metrics_test['balanced_acc'])}")
                 auc_test.append(np.mean(metrics_test['auc']))
                 test_acc.append(np.mean(metrics_test['balanced_acc']))
@@ -158,7 +161,8 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
                 print('\n')
 
     #save_bac(num_epochs, train_acc, test_acc, group)
-    save_auc(num_epochs, auc_train, auc_test, group, global_metrics)
+    save_auc(num_epochs, auc_train, auc_test, group, args)
+
 
 
 def main_train(device):
@@ -170,29 +174,44 @@ def main_train(device):
     print('-----------------Prepare Dataset-----------------')
     X = np.array(np.load('dataset/prepared/data_processed.npy'))
     y = np.array(np.load('dataset/prepared/labels.npy'))
-    mapping = np.array(mapping_split(os.listdir('split')))
 
+    if args.fold_mapping == True:
+        mapping = np.array(mapping_split(os.listdir('split')))
+        IDs = mapping[:,2]
 
-    # Prepare Group Folding
-    IDs = mapping[:,2]
+        n_splits = 5
+        group = 0
+        group_kfold = GroupKFold(n_splits=n_splits)
+        fold = group_kfold.split(X, y, groups=IDs)
+    else:
+        n_splits = 5
+        group = 0
+        kfold = StratifiedKFold(n_splits=n_splits, random_state=42, shuffle=True)
+        y = y.reshape(-1,1)
+        fold = kfold.split(X, y)
+        
 
-    n_splits = 5
-    group = 0
-    group_kfold = GroupKFold(n_splits=n_splits)
-
-    for train_index, test_index in group_kfold.split(X, y, groups=IDs):
+    for train_index, test_index in fold:
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
-        train_indices, test_indices = mapping[train_index][:,1], mapping[test_index][:,1]
 
-        train_dataset = CustomMatrixDataset(X_train, y_train, train_indices)
-        test_dataset = CustomMatrixDataset(X_test, y_test, test_indices)
+        if args.fold_mapping == True:
+            train_indices, test_indices = mapping[train_index][:,1], mapping[test_index][:,1]
 
-        batch_size = 50
+            train_dataset = CustomMatrixDataset(X_train, y_train, train_indices)
+            test_dataset = CustomMatrixDataset(X_test, y_test, test_indices)
+        else:
+            train_dataset = MatrixDataset(X_train, y_train)
+            test_dataset = MatrixDataset(X_test, y_test) 
+
+        batch_size = 20
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
         print(f'-----------------Start Training Group {group}------------------')
-        train_test(200, X.shape, train_loader, test_loader, device, group)
+        if args.fold_mapping == True:
+            train_test(args.epochs, X.shape, train_loader, test_loader, device, group)
+        else:
+            train_test_paper(args.epochs, X.shape, train_loader, test_loader, device, group, args)
         group += 1
 
 

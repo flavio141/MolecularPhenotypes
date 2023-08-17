@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-from utils import one_hot_aminoacids
+from utility import one_hot_aminoacids
 
 class NeuralNetwork(nn.Module):
     def __init__(self, input_dim, rows, output, l2_lambda=0.01):
@@ -158,6 +158,35 @@ class TRAM_Att(nn.Module):
         return output
 
 
+class NN1(nn.Module):
+    def __init__(self, input_dim, rows, output):
+        super(NN1, self).__init__()
+        self.input_dim = input_dim
+        self.output = output
+
+        # Layers
+        self.dropout = nn.Dropout(0.5)
+
+        self.fc1 = nn.Linear(self.input_dim, 256)
+        self.bn1 = nn.BatchNorm1d(256)
+
+        self.fc2 = nn.Linear(256, 128)
+        self.bn2 = nn.BatchNorm1d(128)
+
+        self.fc3 = nn.Linear(128 * rows, self.output)
+
+
+    def forward(self, x):
+        out1 = self.dropout(F.leaky_relu(self.bn1(self.fc1(x).permute(0,2,1)).permute(0,2,1)))
+
+        out2 = self.dropout(F.leaky_relu(self.bn2(self.fc2(out1).permute(0,2,1)).permute(0,2,1)))
+
+        out2 = torch.flatten(out2, start_dim=1, end_dim=2)
+        
+        output = self.fc3(out2)
+        return output
+    
+
 class NN2(nn.Module):
     def __init__(self, input_dim, rows, output):
         super(NN2, self).__init__()
@@ -262,6 +291,18 @@ class CustomMatrixDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.X[idx], self.y[idx], self.indices[idx]
+
+
+class MatrixDataset(Dataset):
+    def __init__(self, X, y):
+        self.X = torch.tensor(X, dtype=torch.float32)
+        self.y = torch.tensor(y, dtype=torch.float32)
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        return self.X[idx], self.y[idx]
 
 
 class LossWrapper(torch.nn.Module):

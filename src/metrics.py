@@ -1,3 +1,4 @@
+import os
 import torch
 import openpyxl as xl
 import matplotlib.pyplot as plt
@@ -77,8 +78,8 @@ def train_metrics(metrics, mcc, prec, rec, spec, balanced_acc, f1_score, auc):
     return metrics
 
 
-def save_bac(num_epochs, train_acc, test_acc, group, global_metric):
-    if global_metric:
+def save_bac(num_epochs, train_acc, test_acc, group, args):
+    if args.global_metric:
         plt.plot(range(num_epochs), train_acc, label='Train Balanced Accuracy', color='blue')
         plt.plot(range(num_epochs), test_acc, label='Test Balanced Accuracy', color='red')
 
@@ -110,8 +111,11 @@ def save_bac(num_epochs, train_acc, test_acc, group, global_metric):
         wb.close()
 
 
-def save_auc(num_epochs, auc_train, auc_test, group, global_metrics):
-    if global_metrics:
+def save_auc(num_epochs, auc_train, auc_test, group, args):
+    if args.global_metrics == True:
+        if not os.path.exists(f'plots/trials_{args.trials}'):
+            os.mkdir(f'plots/trials_{args.trials}')
+
         plt.plot(range(num_epochs), auc_train, label='Train AUC', color='blue')
         plt.plot(range(num_epochs), auc_test, label='Test AUC', color='red')
 
@@ -120,7 +124,7 @@ def save_auc(num_epochs, auc_train, auc_test, group, global_metrics):
         plt.title('AUC per Epochs - Train vs. Test')
         plt.legend()
         plt.show()
-        plt.savefig(f'plots/AUCTrain_vs_AUCTest_{group}.png')
+        plt.savefig(f'plots/trials_{args.trials}/AUCTrain_vs_AUCTest_{group}.png')
 
         plt.clf()
         plt.close()
@@ -138,5 +142,8 @@ def save_auc(num_epochs, auc_train, auc_test, group, global_metrics):
         for test in auc_test:
             ws.append(test.tolist())
         
-        wb.save(f'results/Fold{group}_AUC_Results.xlsx')
+        if not os.path.exists(f'results/trials_{args.trials}'):
+            os.mkdir(f'results/trials_{args.trials}')
+        
+        wb.save(f'results/trials_{args.trials}/Fold{group}_AUC_Results.xlsx')
         wb.close()

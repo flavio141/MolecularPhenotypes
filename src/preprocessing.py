@@ -1,18 +1,33 @@
 import os
 import pickle
 import urllib
+import openpyxl
 import requests
 import numpy as np
 import pandas as pd
 import requests as r
 
 from tqdm import tqdm
-from utils.utils import save_percentage
-from src.unirep_emb import UniRep_embedding
+from unirep_emb import UniRep_embedding
 from sklearn.metrics.pairwise import cosine_similarity
 from Bio.PDB import MMCIFParser, PDBIO, PDBParser, PDBList
 
-data = pd.read_csv('dataset/database.tsv', sep='\t')
+data = pd.read_csv('dataset/SNV.tsv', sep='\t')
+
+def save_percentage(perc):
+    wb = openpyxl.Workbook()
+    sheet = wb.active
+
+    sheet["A1"] = "PDB wt"
+    sheet["B1"] = "Percentage Position"
+
+    row = 2
+    for keys, subkeys in perc.items():
+        sheet.cell(row=row, column=1, value=keys)
+        sheet.cell(row=row, column=2, value=subkeys)
+        row += 1
+
+    wb.save("embedding/additional_features/percentage.xlsx")
 
 
 def download_cif_file(cIDs, pdbs):
@@ -128,6 +143,8 @@ def download_uniprot_sequences():
 
 
 def fasta_mutated(wildtype, position, mutation, pdb):
+    pdb_errors = open('pdb_errors.txt', 'w')
+
     for wt, pos, mut, pdb, count in zip(wildtype, position, mutation, pdb, tqdm(range(0, len(pdb)), desc= 'Extracting FASTA Mutated')):
         pdb_id = pdb.split(':')[0]
         chain = pdb.split(':')[1]
@@ -135,7 +152,7 @@ def fasta_mutated(wildtype, position, mutation, pdb):
         with open(f'dataset/fasta/{pdb_id}_{chain}.fasta', 'r') as fasta:
             fasta_original = fasta.read()
         
-        if fasta_original.split('\n')[1][pos - 1] == wt:
+        if len(fasta_original.split('\n')[1]) >= pos and fasta_original.split('\n')[1][pos - 1] == wt:
             if ',' in mut:
                 for m in mut.split(','):
                     if f'{pdb_id}_{chain}_{wt}_{pos}_{m}.fasta' in os.listdir('dataset/fasta_mut'):
@@ -155,9 +172,13 @@ def fasta_mutated(wildtype, position, mutation, pdb):
 
                 with open(f'dataset/fasta_mut/{pdb_id}_{chain}_{wt}_{pos}_{mut}.fasta', 'w') as mutated:
                     mutated.write(fasta_mut)
-        else:
+        elif len(fasta_original.split('\n')[1]) >= pos:
             original = fasta_original.split("\n")[1][pos - 1]
+            pdb_errors.write(f'{pdb} in position {pos}')
             print(f'No match between {wt} and the amino acids at position {original}:{pos} for {pdb}')
+        else:
+            pdb_errors.write(f'{pdb} in position {pos}')
+            print(f'The position is out of range: {pos} and the pdb is {pdb}')
 
 
 def feature_extraction_mut(cIDs):
@@ -199,12 +220,19 @@ def similarity():
             if pdb_id not in cos_similarity.keys():
                 cos_similarity[pdb_id] = {}
 
+            if f'{pdb_id}.embeddings.pkl' not in os.listdir('embedding/fastaEmb_wt'):
+                continue
+
             with open (f'embedding/fastaEmb_wt/{pdb_id}.embeddings.pkl', 'rb') as wild:
                 wildtype = pickle.load(wild)
 
 
             if ',' in mut:
                 for m in mut.split(','):
+                    
+                    if f'{pdb_id}_{wt}_{pos}_{m}.embeddings.pkl' not in os.listdir('embedding/fastaEmb_mut'):
+                        continue
+
                     with open (f'embedding/fastaEmb_mut/{pdb_id}_{wt}_{pos}_{m}.embeddings.pkl', 'rb') as mt:
                         mutated = pickle.load(mt)
                     similarity_matrix = cosine_similarity(wildtype[list(wildtype.keys())[0]], mutated[list(mutated.keys())[0]])
@@ -212,6 +240,9 @@ def similarity():
 
                     cos_similarity[pdb_id][pdb_id + '_' + wt + '_' + str(pos) + '_' + m].append(wildtype[list(wildtype.keys())[0]] - mutated[list(mutated.keys())[0]])
             else:
+                if f'{pdb_id}_{wt}_{pos}_{mut}.embeddings.pkl' not in os.listdir('embedding/fastaEmb_mut'):
+                    continue
+
                 with open (f'embedding/fastaEmb_mut/{pdb_id}_{wt}_{pos}_{mut}.embeddings.pkl', 'rb') as mt:
                     mutated = pickle.load(mt)
                 
@@ -249,7 +280,7 @@ def extract_data_wt(extract_data=False):
     
     if extract_data:
         try:
-            data.drop(columns=['phenotypic_annotation'], inplace=True)
+            #data.drop(columns=['phenotypic_annotation'], inplace=True)
 
             nans = {'wildtype' : data['wildtype'].isnull().sum(), 
                     'position': data['position'].isnull().sum(), 
