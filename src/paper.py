@@ -5,13 +5,13 @@ import torch.optim as optim
 
 from focal_loss.focal_loss import FocalLoss
 from metrics import custom_metrics, train_metrics, label_metrics, save_auc
-from models import NeuralNetwork, CustomMatrixDataset, MatrixDataset, LossWrapper, TRAM, TRAM_Att, TRAM_Att_solo, NN1, NN2, NN3
+from models import LossWrapper, TRAM_Att_solo, NN1, NN2, NN3
 
 def train_test_paper(num_epochs, dimension, train_loader, test_loader, device, group, args):
     input_size = dimension[-1]
     output_size = 1
 
-    model = NN3(input_size, dimension[-2], output_size)
+    model = TRAM_Att_solo(input_size, dimension[-2], output_size)
     model.to(device)
 
     loss = FocalLoss(gamma=2)
@@ -20,7 +20,7 @@ def train_test_paper(num_epochs, dimension, train_loader, test_loader, device, g
     
     train_acc, test_acc, auc_train, auc_test = [], [], [], []
 
-    for epoch in range(num_epochs):
+    for epoch in range(int(num_epochs)):
         running_loss = 0.0
         metrics = {"mcc": [], "prec": [], "rec": [], "spec": [], "balanced_acc": [], "f1_score": [], "auc": []}
 
@@ -106,9 +106,9 @@ def train_test_paper(num_epochs, dimension, train_loader, test_loader, device, g
                 test_acc.append(np.mean(metrics_test['balanced_acc']))
                 print('\n')
             else:           
-                print(f"Test Loss: {avg_loss:.4f}, AUC: {torch.nanmean(torch.stack(metrics['auc']), dim=0).tolist()}")
+                print(f"Test Loss: {avg_loss:.4f}, AUC: {torch.nanmean(torch.stack(metrics_test['auc']), dim=0).tolist()}")
                 auc_test.append(torch.nanmean(torch.stack(metrics_test["auc"]), dim=0))
                 test_acc.append(torch.nanmean(torch.stack(metrics_test["balanced_acc"]), dim=0))
                 print('\n')
 
-    save_auc(num_epochs, auc_train, auc_test, group, args.global_metrics)
+    save_auc(num_epochs, auc_train, auc_test, group, args)

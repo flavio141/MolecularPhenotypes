@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-data = pd.read_csv('dataset/SNV.tsv', sep='\t')
+data = pd.read_csv('dataset/database.tsv', sep='\t')
 
 def extract_rows_around_position(matrix, row_index, num_rows_to_extract=25):
     num_rows, num_cols = matrix.shape
@@ -29,7 +29,7 @@ def extract_rows_around_position(matrix, row_index, num_rows_to_extract=25):
     return result_matrix
 
 
-def dataset_preparation(difference):
+def dataset_preparation(args):
     wildtype_mutated = []
     protein_to_mut = []
     labels = []
@@ -52,13 +52,16 @@ def dataset_preparation(difference):
                                           (data['mutation'].str.contains(values[4].split('.')[0])) & 
                                           (data['position'] == int(values[3]))].values))[0]
         
-        if difference:
+        if args.difference:
             wildtype_mutated.append((features_wt - features_mut))
         else:
             wildtype_mutated.append(matrix_tuple)
         
         protein_to_mut.append((information[0], mutated.split('.')[0]))
-        labels.append(np.nan_to_num(np.abs(int(information[-1].replace('Neutral', '0').replace('Deleterious', '1'))), nan=-999))
+        if args.fold_mapping == 'True':
+            labels.append(np.nan_to_num(np.abs(information[-15:-12]), nan=-999))
+        else:
+            labels.append(np.nan_to_num(np.abs(int(information[-1].replace('Neutral', '0').replace('Deleterious', '1'))), nan=-999))
 
     assert len(protein_to_mut) == len(wildtype_mutated) == len(labels)
     

@@ -160,6 +160,7 @@ dataset/pdb_temp
 dataset/fasta_mut
 dataset/prepared
 dataset/HPMPdb
+dataset/paper
 
 # Models
 model
@@ -167,6 +168,12 @@ embedding
 
 # Utils
 utils/logs
+
+# Plot
+plots
+
+# Results
+results/trials_0
 
 # DSSP
 dssp

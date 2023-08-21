@@ -1,3 +1,6 @@
 [submodule "GCN-for-Structure-and-Function"]
 	path = GCN-for-Structure-and-Function
 	url = https://github.com/stamakro/GCN-for-Structure-and-Function.git
+[submodule "HOPER"]
+	path = HOPER
+	url = https://github.com/serbulent/HOPER.git

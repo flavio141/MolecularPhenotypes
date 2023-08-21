@@ -112,12 +112,12 @@ def save_bac(num_epochs, train_acc, test_acc, group, args):
 
 
 def save_auc(num_epochs, auc_train, auc_test, group, args):
-    if args.global_metrics == True:
+    if args.global_metrics == 'True':
         if not os.path.exists(f'plots/trials_{args.trials}'):
             os.mkdir(f'plots/trials_{args.trials}')
 
-        plt.plot(range(num_epochs), auc_train, label='Train AUC', color='blue')
-        plt.plot(range(num_epochs), auc_test, label='Test AUC', color='red')
+        plt.plot(range(int(num_epochs)), auc_train, label='Train AUC', color='blue')
+        plt.plot(range(int(num_epochs)), auc_test, label='Test AUC', color='red')
 
         plt.xlabel('Epochs')
         plt.ylabel('AUC')
@@ -134,13 +134,19 @@ def save_auc(num_epochs, auc_train, auc_test, group, args):
         ws.append([f'Label AUC: {label}'for label in range(15)])
 
         for train in auc_train:
-            ws.append(train.tolist())
+            if len(train) > 1:
+                ws.append(train.tolist())
+            else:
+                ws.append([train])
 
         ws.append([])
         ws.append([f'Label Test AUC: {label}'for label in range(15)])
 
         for test in auc_test:
-            ws.append(test.tolist())
+            if len(test) > 1:
+                ws.append(test.tolist())
+            else:
+                ws.append([test])
         
         if not os.path.exists(f'results/trials_{args.trials}'):
             os.mkdir(f'results/trials_{args.trials}')

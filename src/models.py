@@ -280,6 +280,46 @@ class TRAM_Att_solo(nn.Module):
         return output
 
 
+class TRAM_Att_solo_one_hot(nn.Module):
+    def __init__(self, input_dim, rows, output):
+        super(TRAM_Att_solo_one_hot, self).__init__()
+        self.input_dim = input_dim
+        self.output = output
+
+        # Layers
+        self.dropout = nn.Dropout(0.5)
+
+        self.fc1 = nn.Linear(self.input_dim, 256)
+        
+        # Attention Mechanism
+        self.attention_a = nn.Linear(256, 64)
+        self.attention_b = nn.Linear(256, 64)
+        self.attention_c = nn.Linear(64, 1)
+
+        self.fc2 = nn.Linear(256, 128)
+
+        self.fc3 = nn.Linear(128 + 20, self.output)
+
+
+    def forward(self, x, tensor_one_hot):
+        out1 = self.dropout(F.leaky_relu(self.fc1(x)))
+
+        attention_amut = self.dropout(F.tanh(self.attention_a(out1)))
+        attention_bmut = self.dropout(F.sigmoid(self.attention_b(out1)))
+        A = attention_amut.mul(attention_bmut)
+        attention_cmut = F.softmax(torch.transpose(self.attention_c(A), 2, 1), dim=1)
+
+        out1 = torch.matmul(attention_cmut, out1)
+
+        out1 = torch.flatten(out1, start_dim=1, end_dim=2)
+
+        out2 = self.dropout(F.leaky_relu(self.fc2(out1)))
+        out2 = torch.hstack((out2, tensor_one_hot))
+        
+        output = self.fc3(out2)
+        return output
+    
+
 class CustomMatrixDataset(Dataset):
     def __init__(self, X, y, indices):
         self.X = torch.tensor(X, dtype=torch.float32)
