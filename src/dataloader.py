@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-data = pd.read_csv('dataset/database.tsv', sep='\t')
+data = pd.read_csv('dataset/SNV.tsv', sep='\t')
 
 def extract_rows_around_position(matrix, row_index, num_rows_to_extract=25):
     num_rows, num_cols = matrix.shape
@@ -70,18 +70,21 @@ def dataset_preparation(args):
     np.save('dataset/prepared/labels.npy', labels)
 
 
-def mapping_split(split_files):
+def mapping_split(split_files, args):
     protein_mut_split = []
     protein_to_mut = np.load('dataset/prepared/mapping.npy')
 
-    for num, split in enumerate(split_files):
-        with open(f'split/{split}', 'r') as file:
-            splits = file.read().split('\n')
+    if args.fold_mapping == 'True':
+        for num, split in enumerate(split_files):
+            with open(f'split/{split}', 'r') as file:
+                splits = file.read().split('\n')
 
-        for idx, tup in enumerate(protein_to_mut):
-            if tup[0] in splits:
-                tup = list(tup)
-                tup.insert(2, num)
-                protein_mut_split.append(tuple(tup))
+            for idx, tup in enumerate(protein_to_mut):
+                if tup[0] in splits:
+                    tup = list(tup)
+                    tup.insert(2, num)
+                    protein_mut_split.append(tuple(tup))
+    else:
+        return protein_to_mut
 
     return protein_mut_split

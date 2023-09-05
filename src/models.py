@@ -241,6 +241,79 @@ class NN3(nn.Module):
         return output
 
 
+class NN4(nn.Module):
+    def __init__(self, input_dim, rows, output):
+        super(NN4, self).__init__()
+        self.input_dim = input_dim
+        self.output = output
+
+        # Layers
+        self.dropout = nn.Dropout(0.5)
+
+        self.fc1 = nn.Linear(self.input_dim, 256)
+        self.bn1 = nn.BatchNorm1d(256)
+
+        self.fc2 = nn.Linear(256 * rows, self.output)
+
+
+    def forward(self, x):
+        out1 = self.dropout(F.leaky_relu(self.bn1(self.fc1(x).permute(0,2,1)).permute(0,2,1)))
+
+        out1 = torch.flatten(out1, start_dim=1, end_dim=2)
+        
+        output = self.fc2(out1)
+        return output
+    
+
+class NN5(nn.Module):
+    def __init__(self, input_dim, rows, output):
+        super(NN5, self).__init__()
+        self.input_dim = input_dim
+        self.output = output
+
+        # Layers
+        self.dropout = nn.Dropout(0.5)
+
+        self.fc1 = nn.Linear(self.input_dim, 256)
+        self.bn1 = nn.LayerNorm([rows, 256])
+
+        self.fc2 = nn.Linear(256, 128)
+        self.bn2 = nn.LayerNorm([rows, 128])
+
+        self.fc3 = nn.Linear((128 * rows) + 20, self.output)
+
+
+    def forward(self, x, tensor_one_hot):
+        out1 = self.dropout(F.leaky_relu(self.bn1(self.fc1(x))))
+
+        out2 = self.dropout(F.leaky_relu(self.bn2(self.fc2(out1))))
+
+        out2 = torch.flatten(out2, start_dim=1, end_dim=2)
+        out2 = torch.hstack((out2, tensor_one_hot))
+        
+        output = self.fc3(out2)
+        return output
+
+
+class NN6(nn.Module):
+    def __init__(self, input_dim, rows, output):
+        super(NN6, self).__init__()
+        self.input_dim = input_dim
+        self.output = output
+
+        # Layers
+        self.dropout = nn.Dropout(0.5)
+
+        self.fc1 = nn.Linear(self.input_dim, 10)
+        self.fc2 = nn.Linear(10, self.output)
+
+
+    def forward(self, x):
+        out1 = self.dropout(F.leaky_relu(self.fc1(x)))
+        output = self.dropout(F.leaky_relu(self.fc2(out1)))
+        return output
+
+
 class TRAM_Att_solo(nn.Module):
     def __init__(self, input_dim, rows, output):
         super(TRAM_Att_solo, self).__init__()
@@ -334,15 +407,16 @@ class CustomMatrixDataset(Dataset):
 
 
 class MatrixDataset(Dataset):
-    def __init__(self, X, y):
+    def __init__(self, X, y, indices):
         self.X = torch.tensor(X, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.float32)
+        self.indices = indices
 
     def __len__(self):
         return len(self.X)
 
     def __getitem__(self, idx):
-        return self.X[idx], self.y[idx]
+        return self.X[idx], self.y[idx], self.indices[idx]
 
 
 class LossWrapper(torch.nn.Module):

@@ -78,17 +78,29 @@ def train_metrics(metrics, mcc, prec, rec, spec, balanced_acc, f1_score, auc):
     return metrics
 
 
+def test_metrics(metrics_test, mcc, spec, balanced_acc, auc):
+    metrics_test["spec"].append(spec)
+    metrics_test["balanced_acc"].append(balanced_acc)
+    metrics_test["mcc"].append(mcc)
+    metrics_test["auc"].append(auc)
+
+    return metrics_test
+
+
 def save_bac(num_epochs, train_acc, test_acc, group, args):
-    if args.global_metric:
-        plt.plot(range(num_epochs), train_acc, label='Train Balanced Accuracy', color='blue')
-        plt.plot(range(num_epochs), test_acc, label='Test Balanced Accuracy', color='red')
+    if args.global_metrics == 'True':
+        if not os.path.exists(f'plots/trials_{args.trials}'):
+            os.mkdir(f'plots/trials_{args.trials}')
+        
+        plt.plot(range(int(num_epochs)), train_acc, label='Train Balanced Accuracy', color='blue')
+        plt.plot(range(int(num_epochs)), test_acc, label='Test Balanced Accuracy', color='red')
 
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
         plt.title('Balanced Accuracy - Train vs. Test')
         plt.legend()
         plt.show()
-        plt.savefig(f'plots/train_vs_test_{group}.png')
+        plt.savefig(f'plots/trials_{args.trials}/train_vs_test_{group}.png')
 
         plt.clf()
         plt.close()
@@ -96,18 +108,24 @@ def save_bac(num_epochs, train_acc, test_acc, group, args):
     else:
         wb = xl.Workbook()
         ws = wb.active
-        ws.append([f'Label AUC: {label}'for label in range(15)])
+        ws.append([f'Label BAC: {label}'for label in range(15)])
 
         for train in train_acc:
-            ws.append(train.tolist())
+            if len(train) > 1:
+                ws.append(train.tolist())
+            else:
+                ws.append([train])
 
         ws.append([])
-        ws.append([f'Label Test AUC: {label}'for label in range(15)])
+        ws.append([f'Label Test BAC: {label}'for label in range(15)])
 
         for test in test_acc:
-            ws.append(test.tolist())
+            if len(test) > 1:
+                ws.append(test.tolist())
+            else:
+                ws.append([test])
         
-        wb.save(f'results/Fold{group}_BAC_Results.xlsx')
+        wb.save(f'results/trials_{args.trials}/Fold{group}_BAC_Results.xlsx')
         wb.close()
 
 

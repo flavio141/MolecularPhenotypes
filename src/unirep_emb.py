@@ -26,6 +26,7 @@ def UniRep_embedding(fastas, fastas_mut):
         fasta_present = [fasta_mut for fasta_mut in fastas_mut if fasta.split('.')[0] in fasta_mut]
 
         for fasta_mut in fasta_present:
+            sequence = ''
             with open(f'dataset/fasta_mut/{fasta_mut}', 'r') as file:
                 for line in file:
                     line = line.strip()
