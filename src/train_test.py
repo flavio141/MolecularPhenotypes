@@ -11,7 +11,7 @@ from focal_loss.focal_loss import FocalLoss
 from sklearn.model_selection import GroupKFold, StratifiedKFold
 from metrics import custom_metrics, train_metrics, test_metrics, label_metrics, save_auc, save_bac
 from models import NeuralNetwork, CustomMatrixDataset, MatrixDataset, LossWrapper, TRAM, TRAM_Att, TRAM_Att_solo, TRAM_Att_solo_one_hot, NN1, NN2, NN3, NN4, NN5, NN6
-from dataloader import dataset_preparation, mapping_split
+from dataloader import dataset_preparation, mapping_split, dataset_preparation_proteinbert
 from paper import train_test_paper
 
 parser = argparse.ArgumentParser(description=('dataloader.py prepare dataset for training, validation, test'))
@@ -188,6 +188,10 @@ def main_train(device):
     if args.prepare_data == 'True':
         print('-----------------Extracting Dataset-----------------')
         dataset_preparation(args)
+    elif args.prepare_data == 'False':
+        pass
+    else:
+        dataset_preparation_proteinbert(args, os.listdir('dataset/fasta'))
 
     print('-----------------Prepare Dataset-----------------')
     X = np.array(np.load('dataset/prepared/data_processed.npy'))
@@ -204,7 +208,7 @@ def main_train(device):
     else:
         mapping = np.array(mapping_split(os.listdir('split'), args))
 
-        n_splits = 5
+        n_splits = 4
         group = 0
         kfold = StratifiedKFold(n_splits=n_splits, random_state=42, shuffle=True)
         y = y.reshape(-1,1)
@@ -226,7 +230,7 @@ def main_train(device):
             train_dataset = MatrixDataset(X_train, y_train, train_indices)
             test_dataset = MatrixDataset(X_test, y_test, test_indices) 
 
-        batch_size = 10
+        batch_size = 64
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
         print(f'-----------------Start Training Group {group}------------------')

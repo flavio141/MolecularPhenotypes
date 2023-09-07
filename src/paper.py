@@ -17,7 +17,7 @@ def train_test_paper(num_epochs, dimension, train_loader, test_loader, device, g
 
     loss = FocalLoss(gamma=2)
     criterion = LossWrapper(loss=loss, ignore_index=-999)
-    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001, weight_decay=0.001)
     
     train_acc, test_acc, auc_train, auc_test = [], [], [], []
 
