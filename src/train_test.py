@@ -1,8 +1,10 @@
 import os
 import torch
 import argparse
+import pickle
 import numpy as np
 import torch.nn as nn
+import networkx as nx
 import torch.optim as optim
 
 from utility import one_hot_aminoacids
@@ -23,15 +25,16 @@ parser.add_argument('--trials', required=True, default=0, help='Tell which trial
 parser.add_argument('--epochs', required=False, default=10, help='Tell how many epochs you need to do')
 parser.add_argument('--global_metrics', required=True, default='False', help='Tell if it is necessary to extract global metrics')
 parser.add_argument('--fold_mapping', required=True, default='False', help='Tell if we are dealing with the paper')
+parser.add_argument('--train', required=False, default='True', help='Tell if we are dealing with the paper')
 
 args = parser.parse_args()
 
 
 def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
-    input_size = 20#dimension[-1]
+    input_size = dimension[-1]
     output_size = 3
 
-    model = NN6(input_size, dimension[-2], output_size)
+    model = NN5(input_size, dimension[-2], output_size)
     model.to(device)
 
     loss = FocalLoss(gamma=2)
@@ -193,52 +196,56 @@ def main_train(device):
     else:
         dataset_preparation_proteinbert(args, os.listdir('dataset/fasta'))
 
-    print('-----------------Prepare Dataset-----------------')
-    X = np.array(np.load('dataset/prepared/data_processed.npy'))
-    y = np.array(np.load('dataset/prepared/labels.npy'))
-
-    if args.fold_mapping == 'True':
-        mapping = np.array(mapping_split(os.listdir('split'), args))
-        IDs = mapping[:,2]
-
-        n_splits = 5
-        group = 0
-        group_kfold = GroupKFold(n_splits=n_splits)
-        fold = group_kfold.split(X, y, groups=IDs)
-    else:
-        mapping = np.array(mapping_split(os.listdir('split'), args))
-
-        n_splits = 4
-        group = 0
-        kfold = StratifiedKFold(n_splits=n_splits, random_state=42, shuffle=True)
-        y = y.reshape(-1,1)
-        fold = kfold.split(X, y)
-        
-
-    for train_index, test_index in fold:
-        X_train, X_test = X[train_index], X[test_index]
-        y_train, y_test = y[train_index], y[test_index]
+    if args.train == 'True':
+        print('-----------------Prepare Dataset-----------------')
+        X = np.array(np.load('dataset/prepared/data_processed.npy'))
+        y = np.array(np.load('dataset/prepared/labels.npy'))
+        list_of_dicts = pickle.load('embedding/additional_features/graphs.pickle')
+        graphs = [nx.Graph(graph) for graph in list_of_dicts]
 
         if args.fold_mapping == 'True':
-            train_indices, test_indices = mapping[train_index][:,1], mapping[test_index][:,1]
+            mapping = np.array(mapping_split(os.listdir('split'), args))
+            IDs = mapping[:,2]
 
-            train_dataset = CustomMatrixDataset(X_train, y_train, train_indices)
-            test_dataset = CustomMatrixDataset(X_test, y_test, test_indices)
+            n_splits = 5
+            group = 0
+            group_kfold = GroupKFold(n_splits=n_splits)
+            fold = group_kfold.split(X, y, groups=IDs)
         else:
-            train_indices, test_indices = mapping[train_index][:,1], mapping[test_index][:,1]
+            mapping = np.array(mapping_split(os.listdir('split'), args))
 
-            train_dataset = MatrixDataset(X_train, y_train, train_indices)
-            test_dataset = MatrixDataset(X_test, y_test, test_indices) 
+            n_splits = 4
+            group = 0
+            kfold = StratifiedKFold(n_splits=n_splits, random_state=42, shuffle=True)
+            y = y.reshape(-1,1)
+            fold = kfold.split(X, y)
+            
 
-        batch_size = 64
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-        print(f'-----------------Start Training Group {group}------------------')
-        if args.fold_mapping == 'True':
-            train_test(args.epochs, X.shape, train_loader, test_loader, device, group)
-        else:
-            train_test_paper(args.epochs, X.shape, train_loader, test_loader, device, group, args)
-        group += 1
+        for train_index, test_index in fold:
+            X_train, X_test = X[train_index], X[test_index]
+            y_train, y_test = y[train_index], y[test_index]
+            graphs_train, graphs_test = graphs[train_index], graphs[test_index]
+
+            if args.fold_mapping == 'True':
+                train_indices, test_indices = mapping[train_index][:,1], mapping[test_index][:,1]
+
+                train_dataset = CustomMatrixDataset(X_train, y_train, train_indices)
+                test_dataset = CustomMatrixDataset(X_test, y_test, test_indices)
+            else:
+                train_indices, test_indices = mapping[train_index][:,1], mapping[test_index][:,1]
+
+                train_dataset = MatrixDataset(X_train, y_train, train_indices)
+                test_dataset = MatrixDataset(X_test, y_test, test_indices) 
+
+            batch_size = 64
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+            print(f'-----------------Start Training Group {group}------------------')
+            if args.fold_mapping == 'True':
+                train_test(args.epochs, X.shape, train_loader, test_loader, device, group)
+            else:
+                train_test_paper(args.epochs, X.shape, train_loader, test_loader, device, group, args)
+            group += 1
 
 
 if __name__ == "__main__":

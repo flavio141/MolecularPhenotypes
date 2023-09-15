@@ -1,7 +1,6 @@
 import os
 import pickle
 import urllib
-import openpyxl
 import requests
 import numpy as np
 import pandas as pd
@@ -13,21 +12,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from Bio.PDB import MMCIFParser, PDBIO, PDBParser, PDBList
 
 data = pd.read_csv('dataset/SNV.tsv', sep='\t')
-
-def save_percentage(perc):
-    wb = openpyxl.Workbook()
-    sheet = wb.active
-
-    sheet["A1"] = "PDB wt"
-    sheet["B1"] = "Percentage Position"
-
-    row = 2
-    for keys, subkeys in perc.items():
-        sheet.cell(row=row, column=1, value=keys)
-        sheet.cell(row=row, column=2, value=subkeys)
-        row += 1
-
-    wb.save("embedding/additional_features/percentage.xlsx")
 
 
 def download_cif_file(cIDs, pdbs):
@@ -112,7 +96,7 @@ def download_pdb_file(cIDs):
         print(f'Error {cID}: {e}')
 
 
-def download_uniprot_sequences():
+def download_uniprot_file():
     try:
         pdb_map = data.groupby('uniprot_id')['pdb_id'].unique()
         for uniprot_id, step in zip(data['uniprot_id'].unique(), tqdm(range(0, len(data['uniprot_id'].unique())), desc= 'Extracting FASTA')):
@@ -142,7 +126,7 @@ def download_uniprot_sequences():
         print(f'There was an error: {error}')
 
 
-def fasta_mutated(wildtype, position, mutation, pdb):
+def create_fasta_mutated(wildtype, position, mutation, pdb):
     pdb_errors = open('pdb_errors.txt', 'w')
 
     for wt, pos, mut, pdb, count in zip(wildtype, position, mutation, pdb, tqdm(range(0, len(pdb)), desc= 'Extracting FASTA Mutated')):
@@ -256,67 +240,41 @@ def similarity():
         print(f'There was an error: {error} {pdb_id}')
 
 
-def percentage():
-    percentage_dict = {}
-    for fasta in os.listdir('dataset/fasta_mut'):
-        sequence = ''
-        with open(f'dataset/fasta_mut/{fasta}', 'r') as file:
-            for line in file:
-                line = line.strip()
-                if line.startswith('>'):
-                    continue
-                sequence += line
-        position = int(fasta.split('_')[3])
-        perc = position / len(sequence) * 100
-
-        percentage_dict[fasta.split('.')[0]] = perc
-    
-    save_percentage(percentage_dict)
-
-
-def extract_data_wt(extract_data=False):
+def extract_data_wt():
     if not os.path.exists('dataset'):
         raise
     
-    if extract_data:
-        try:
-            #data.drop(columns=['phenotypic_annotation'], inplace=True)
+    try:
+        nans = {'wildtype' : data['wildtype'].isnull().sum(), 
+                'position': data['position'].isnull().sum(), 
+                'mutation': data['mutation'].isnull().sum()
+            }
+        
+        if nans['wildtype'] == 0 or nans['position'] == 0 or nans['mutation'] == 0:
+            data.dropna(subset = [min(nans, key=nans.get)])
 
-            nans = {'wildtype' : data['wildtype'].isnull().sum(), 
-                    'position': data['position'].isnull().sum(), 
-                    'mutation': data['mutation'].isnull().sum()
-                }
-            
-            if nans['wildtype'] == 0 or nans['position'] == 0 or nans['mutation'] == 0:
-                data.dropna(subset = [min(nans, key=nans.get)])
+        # Download all PDB files
+        not_pdb = download_pdb_file(data['pdb_id'].unique())
 
-            # Download all PDB files
-            not_pdb = download_pdb_file(data['pdb_id'].unique())
+        # Download PDB files too large as CIF and then convert them
+        if not_pdb:
+            download_cif_file(list(set(not_pdb)), data['pdb_id'].unique())
+        
+        # Extract FASTA
+        download_uniprot_file()
 
-            # Download PDB files too large as CIF and then convert them
-            if not_pdb:
-                download_cif_file(list(set(not_pdb)), data['pdb_id'].unique())
-            
-            # Extract FASTA
-            download_uniprot_sequences()
-
-            # Extract Features
-            feature_extraction_wt(data['pdb_id'].unique())
-        except Exception as error:
-            print(f'There was an error: {error}')
-    else:
-        print('Data not extracted as declared')
+        # Extract Features
+        feature_extraction_wt(data['pdb_id'].unique())
+    except Exception as error:
+        print(f'There was an error: {error}')
 
 
-def extract_data_mut(extract_data_mut=False):
-    if extract_data_mut:
-        try:
-            fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
-            feature_extraction_mut(os.listdir('dataset/fasta_mut'))
-        except Exception as error:
-            print(f'There was an error: {error}')
-    else:
-        print('Data not extracted as declared')
+def extract_data_mut():
+    try:
+        create_fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
+        feature_extraction_mut(os.listdir('dataset/fasta_mut'))
+    except Exception as error:
+        print(f'There was an error: {error}')
 
 
 def features(args, folders):
@@ -324,14 +282,14 @@ def features(args, folders):
         if not os.path.exists(folder):
             os.makedirs(folder)
 
-    extract_data_wt(args.extract_data_wt)
-    extract_data_mut(args.extract_data_mut)
+    if args.extract_data_wt == True:
+        extract_data_wt()
+    if args.extract_data_mut == True:
+        extract_data_mut()
 
     if args.extract_unirep == True:
         UniRep_embedding(os.listdir('dataset/fasta'), os.listdir('dataset/fasta_mut'))
 
     if args.extract_similarity == True:
         similarity()
-    if args.extract_percentage == True:
-        percentage()
     

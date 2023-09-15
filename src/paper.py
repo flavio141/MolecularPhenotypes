@@ -15,7 +15,7 @@ def train_test_paper(num_epochs, dimension, train_loader, test_loader, device, g
     model = TRAM_Att_solo_one_hot(input_size, dimension[-2], output_size)
     model.to(device)
 
-    loss = FocalLoss(gamma=2)
+    loss = FocalLoss(gamma=2.2)
     criterion = LossWrapper(loss=loss, ignore_index=-999)
     optimizer = optim.Adam(model.parameters(), lr=0.0001, weight_decay=0.001)
     

@@ -2,6 +2,7 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
+import networkx as nx
 from tqdm import tqdm
 
 data = pd.read_csv('dataset/SNV.tsv', sep='\t')
@@ -51,7 +52,7 @@ def dataset_preparation(args):
         information = tuple(map(tuple, data.loc[(data['pdb_id'] == pdb_id.replace('_',':')) & 
                                           (data['mutation'].str.contains(values[4].split('.')[0])) & 
                                           (data['position'] == int(values[3]))].values))[0]
-        
+
         if args.difference:
             wildtype_mutated.append((features_wt - features_mut))
         else:
@@ -97,8 +98,33 @@ def dataset_preparation_proteinbert(args, fastas):
     wildtype_mutated = []
     protein_to_mut = []
     labels = []
+    graphs = []
+    threshold = 8
 
     for fasta, count in zip(fastas, tqdm(range(0, len(fastas)), desc= 'Creating dictionary with matrices')):
+        distmap = np.load(f'embedding/distmap_wt/{fasta.split(".")[0]}.distmap.npy')
+        filtered_distmap = np.where(distmap > threshold, 1, 0)
+
+        G = nx.from_numpy_array(filtered_distmap)
+        seqs = ''
+        
+        with open(f'dataset/fasta_pdb/{fasta}', 'r') as file:
+            for line in file:
+                line = line.strip()
+                if line.startswith('>'):
+                    continue
+                seqs += line
+
+        assert G.number_of_nodes() == len(seqs)
+
+        attributes = {}
+        for node, a in enumerate(seqs):
+            attributes[node] = a
+
+        nx.set_node_attributes(G, attributes, name='aminoacid_name')
+
+        graphs.append(nx.to_dict_of_dicts(G))
+
         for mutation in matrices[fasta.split('.')[0]]:
             pdb_id = '_'.join(mutation[0].split('_')[:2])
             values = mutation[0].split('_')
@@ -121,3 +147,4 @@ def dataset_preparation_proteinbert(args, fastas):
     np.save('dataset/prepared/mapping.npy', protein_to_mut)
     np.save('dataset/prepared/data_processed.npy', wildtype_mutated)
     np.save('dataset/prepared/labels.npy', labels)
+    pickle.dump(graphs, open('embedding/additional_features/graphs.pickle', 'wb'))
