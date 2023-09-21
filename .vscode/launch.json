@@ -18,7 +18,7 @@
             "request": "launch",
             "program": "GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py",
             "console": "integratedTerminal",
-            "args": ["dataset/pdb/4ly1_A.pdb", "embedding/distmap_wt/4ly1_A.distmap.npy"],
+            "args": ["dataset/pdb/1kli_H.pdb", "embedding/distmap_wt/1kli_H.distmap.npy", "dataset/SNV.tds"],
             "justMyCode": false
         },
         {
@@ -27,7 +27,7 @@
             "request": "launch",
             "program": "src/train_test.py",
             "console": "integratedTerminal",
-            "args": ["--trials=1", "--difference=True", "--global_metrics=True", "--fold_mapping=False", "--prepare_data=None", "--one_hot=True"],
+            "args": ["--trials=1", "--difference=False", "--global_metrics=True", "--fold_mapping=False", "--prepare_data=False", "--one_hot=True"],
             "justMyCode": false
         },
         {

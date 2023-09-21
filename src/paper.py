@@ -9,10 +9,10 @@ from metrics import custom_metrics, train_metrics, label_metrics, save_auc, save
 from models import LossWrapper, TRAM_Att_solo_one_hot, NN1, NN2, NN3, NN4, NN5, NN6
 
 def train_test_paper(num_epochs, dimension, train_loader, test_loader, device, group, args):
-    input_size = dimension[-1]
+    input_size = 20#dimension[-1]
     output_size = 1
 
-    model = TRAM_Att_solo_one_hot(input_size, dimension[-2], output_size)
+    model = NN6(input_size, dimension[-2], output_size)
     model.to(device)
 
     loss = FocalLoss(gamma=2.2)
@@ -101,9 +101,9 @@ def train_test_paper(num_epochs, dimension, train_loader, test_loader, device, g
 
             for batch_X, batch_y, batch_indices in test_loader:
                 batch_X, batch_y = batch_X.to(device), batch_y.to(device)
-
+                tensor_one_hot = []
+                
                 if args.one_hot == 'True' and args.difference == 'True':
-                    tensor_one_hot = []
 
                     for mapping in batch_indices:
                         mutation = mapping.split('_')[-1]

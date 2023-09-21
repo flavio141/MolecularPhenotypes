@@ -25,7 +25,7 @@ def download_cif_file(cIDs, pdbs):
                 continue
 
             url = 'https://files.rcsb.org/download/{}.cif'.format(pdb_id)
-            response = urllib.request.urlopen(url)
+            response = urllib.request.urlopen(url) # type: ignore
             cif_data = response.read().decode('utf-8')
             
             with open(os.path.join('dataset/cif',cif_file), 'w') as output_handle:
@@ -93,7 +93,7 @@ def download_pdb_file(cIDs):
 
         return not_pdb
     except r.exceptions.RequestException as e:
-        print(f'Error {cID}: {e}')
+        print(f'Error {e}')
 
 
 def download_uniprot_file():
@@ -126,15 +126,19 @@ def download_uniprot_file():
         print(f'There was an error: {error}')
 
 
-def create_fasta_mutated(wildtype, position, mutation, pdb):
+def create_fasta_mutated(wildtype, position, mutation, pdb, args):
     pdb_errors = open('pdb_errors.txt', 'w')
 
     for wt, pos, mut, pdb, count in zip(wildtype, position, mutation, pdb, tqdm(range(0, len(pdb)), desc= 'Extracting FASTA Mutated')):
         pdb_id = pdb.split(':')[0]
         chain = pdb.split(':')[1]
 
-        with open(f'dataset/fasta/{pdb_id}_{chain}.fasta', 'r') as fasta:
-            fasta_original = fasta.read()
+        if args.paper == True:
+            with open(f'dataset/fasta_pdb/{pdb_id}_{chain}.fasta', 'r') as fasta:
+                fasta_original = fasta.read()
+        else:
+            with open(f'dataset/fasta/{pdb_id}_{chain}.fasta', 'r') as fasta:
+                fasta_original = fasta.read()
         
         if len(fasta_original.split('\n')[1]) >= pos and fasta_original.split('\n')[1][pos - 1] == wt:
             if ',' in mut:
@@ -150,7 +154,7 @@ def create_fasta_mutated(wildtype, position, mutation, pdb):
             else:
                 mutation = mut
                 if f'{pdb_id}_{chain}_{wt}_{pos}_{mut}.fasta' in os.listdir('dataset/fasta_mut'):
-                        continue
+                    continue
                 fasta_seq = fasta_original.split('\n')[1][:pos - 1] + mutation + fasta_original.split('\n')[1][pos:]
                 fasta_mut = fasta_original.split('\n')[0] + '\n' + fasta_seq
 
@@ -186,7 +190,7 @@ def feature_extraction_wt(cIDs):
             path_pdb = f'dataset/pdb/{pdb}.pdb'
             path_pdb_emb = f'embedding/distmap_wt/{pdb}.distmap.npy'
             if not f'{pdb}.distmap.npy' in os.listdir('embedding/distmap_wt'):
-                os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb}')
+                os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb} {"../../dataset/SNV.tsv"}')
     except Exception as error:
         print(f'There was an error: {error}')
 
@@ -235,9 +239,9 @@ def similarity():
 
                 cos_similarity[pdb_id][pdb_id + '_' + wt + '_' + str(pos) + '_' + mut].append(wildtype[list(wildtype.keys())[0]] - mutated[list(mutated.keys())[0]])
         
-        np.save('embedding/additional_features/similarity.npy',cos_similarity)
+        np.save('embedding/additional_features/similarity.npy', cos_similarity) # type: ignore
     except Exception as error:
-        print(f'There was an error: {error} {pdb_id}')
+        print(f'There was an error: {error}')
 
 
 def extract_data_wt():
@@ -251,7 +255,7 @@ def extract_data_wt():
             }
         
         if nans['wildtype'] == 0 or nans['position'] == 0 or nans['mutation'] == 0:
-            data.dropna(subset = [min(nans, key=nans.get)])
+            data.dropna(subset = [min(nans, key=nans.get)]) # type: ignore
 
         # Download all PDB files
         not_pdb = download_pdb_file(data['pdb_id'].unique())
@@ -269,9 +273,9 @@ def extract_data_wt():
         print(f'There was an error: {error}')
 
 
-def extract_data_mut():
+def extract_data_mut(args):
     try:
-        create_fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
+        create_fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'], args)
         feature_extraction_mut(os.listdir('dataset/fasta_mut'))
     except Exception as error:
         print(f'There was an error: {error}')
@@ -285,7 +289,7 @@ def features(args, folders):
     if args.extract_data_wt == True:
         extract_data_wt()
     if args.extract_data_mut == True:
-        extract_data_mut()
+        extract_data_mut(args)
 
     if args.extract_unirep == True:
         UniRep_embedding(os.listdir('dataset/fasta'), os.listdir('dataset/fasta_mut'))

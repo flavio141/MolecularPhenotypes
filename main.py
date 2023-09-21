@@ -6,6 +6,7 @@ parser.add_argument('--extract_data_wt', required=False, default=True, help='Tel
 parser.add_argument('--extract_data_mut', required=False, default=True, help='Tell if necessary to extract information using UniProtID and PDB files for mutated proteins')
 parser.add_argument('--extract_unirep', required=False, default=False, help='Tell if necessary to extract information using UniRep')
 parser.add_argument('--extract_similarity', required=False, default=True, help='Tell if necessary to extract similarities between protein features mutated and wildtypes')
+parser.add_argument('--paper', required=False, default=True, help='Tell if we are working with the paper data')
 
 
 folders = ['dataset/fasta', 'dataset/pdb', 'dataset/cif', 'dataset/pdb_temp', 'dataset/fasta_pdb',

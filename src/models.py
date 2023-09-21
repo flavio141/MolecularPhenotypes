@@ -312,6 +312,25 @@ class NN6(nn.Module):
         out1 = self.dropout(F.leaky_relu(self.fc1(x)))
         output = self.dropout(F.leaky_relu(self.fc2(out1)))
         return output
+    
+
+class NN7(nn.Module):
+    def __init__(self, input_dim, rows, output):
+        super(NN7, self).__init__()
+        self.input_dim = input_dim
+        self.output = output
+
+        # Layers
+        self.dropout = nn.Dropout(0.5)
+
+        self.fc1 = nn.Linear(self.input_dim, 10)
+        self.fc2 = nn.Linear(10, self.output)
+
+
+    def forward(self, x):
+        out1 = self.dropout(F.leaky_relu(self.fc1(x)))
+        output = self.dropout(F.leaky_relu(self.fc2(out1)))
+        return output
 
 
 class TRAM_Att_solo(nn.Module):

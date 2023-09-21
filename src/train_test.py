@@ -86,10 +86,10 @@ def train_test(num_epochs, dimension, train_loader, test_loader, device, group):
                 print('TRAIN')
                 print(f'{error} and {inputs}')
 
-            loss.backward()
+            loss.backward() # type: ignore
             optimizer.step()
 
-            running_loss += loss.item()
+            running_loss += loss.item() # type: ignore
 
             ignore_indices = (labels != -999)
             y_pred = (torch.sigmoid(outputs) > 0.5).float()            
@@ -200,8 +200,8 @@ def main_train(device):
         print('-----------------Prepare Dataset-----------------')
         X = np.array(np.load('dataset/prepared/data_processed.npy'))
         y = np.array(np.load('dataset/prepared/labels.npy'))
-        list_of_dicts = pickle.load('embedding/additional_features/graphs.pickle')
-        graphs = [nx.Graph(graph) for graph in list_of_dicts]
+        #list_of_dicts = pickle.load('embedding/additional_features/graphs.pickle')
+        #graphs = [nx.Graph(graph) for graph in list_of_dicts]
 
         if args.fold_mapping == 'True':
             mapping = np.array(mapping_split(os.listdir('split'), args))
@@ -224,7 +224,7 @@ def main_train(device):
         for train_index, test_index in fold:
             X_train, X_test = X[train_index], X[test_index]
             y_train, y_test = y[train_index], y[test_index]
-            graphs_train, graphs_test = graphs[train_index], graphs[test_index]
+            #graphs_train, graphs_test = graphs[train_index], graphs[test_index]
 
             if args.fold_mapping == 'True':
                 train_indices, test_indices = mapping[train_index][:,1], mapping[test_index][:,1]
