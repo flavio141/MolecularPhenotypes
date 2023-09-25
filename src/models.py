@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 from utility import one_hot_aminoacids
 
+# ATTENTION NEURAL NETWORKS
 class NeuralNetwork(nn.Module):
     def __init__(self, input_dim, rows, output, l2_lambda=0.01):
         super(NeuralNetwork, self).__init__()
@@ -158,6 +159,86 @@ class TRAM_Att(nn.Module):
         return output
 
 
+class TRAM_Att_solo(nn.Module):
+    def __init__(self, input_dim, rows, output):
+        super(TRAM_Att_solo, self).__init__()
+        self.input_dim = input_dim
+        self.output = output
+
+        # Layers
+        self.dropout = nn.Dropout(0.5)
+
+        self.fc1 = nn.Linear(self.input_dim, 256)
+        
+        # Attention Mechanism
+        self.attention_a = nn.Linear(256, 64)
+        self.attention_b = nn.Linear(256, 64)
+        self.attention_c = nn.Linear(64, 1)
+
+        self.fc2 = nn.Linear(256, 128)
+
+        self.fc3 = nn.Linear(128, self.output)
+
+
+    def forward(self, x):
+        out1 = self.dropout(F.leaky_relu(self.fc1(x)))
+
+        attention_amut = self.dropout(F.tanh(self.attention_a(out1)))
+        attention_bmut = self.dropout(F.sigmoid(self.attention_b(out1)))
+        A = attention_amut.mul(attention_bmut)
+        attention_cmut = F.softmax(torch.transpose(self.attention_c(A), 2, 1), dim=1)
+
+        out1 = torch.matmul(attention_cmut, out1)
+
+        out1 = torch.flatten(out1, start_dim=1, end_dim=2)
+
+        out2 = self.dropout(F.leaky_relu(self.fc2(out1)))
+        
+        output = self.fc3(out2)
+        return output
+
+
+class TRAM_Att_solo_one_hot(nn.Module):
+    def __init__(self, input_dim, rows, output):
+        super(TRAM_Att_solo_one_hot, self).__init__()
+        self.input_dim = input_dim
+        self.output = output
+
+        # Layers
+        self.dropout = nn.Dropout(0.5)
+
+        self.fc1 = nn.Linear(self.input_dim, 256)
+        
+        # Attention Mechanism
+        self.attention_a = nn.Linear(256, 64)
+        self.attention_b = nn.Linear(256, 64)
+        self.attention_c = nn.Linear(64, 1)
+
+        self.fc2 = nn.Linear(256, 128)
+
+        self.fc3 = nn.Linear(128 + 20, self.output)
+
+
+    def forward(self, x, tensor_one_hot):
+        out1 = self.dropout(F.leaky_relu(self.fc1(x)))
+
+        attention_amut = self.dropout(F.tanh(self.attention_a(out1)))
+        attention_bmut = self.dropout(F.sigmoid(self.attention_b(out1)))
+        A = attention_amut.mul(attention_bmut)
+        attention_cmut = F.softmax(torch.transpose(self.attention_c(A), 2, 1), dim=1)
+
+        out1 = torch.matmul(attention_cmut, out1)
+
+        out1 = torch.flatten(out1, start_dim=1, end_dim=2)
+
+        out2 = self.dropout(F.leaky_relu(self.fc2(out1)))
+        out2 = torch.hstack((out2, tensor_one_hot))
+        
+        output = self.fc3(out2)
+        return output
+    
+
+# FEED FORWARD NEURAL NETWORKS
 class NN1(nn.Module):
     def __init__(self, input_dim, rows, output):
         super(NN1, self).__init__()
@@ -333,83 +414,41 @@ class NN7(nn.Module):
         return output
 
 
-class TRAM_Att_solo(nn.Module):
-    def __init__(self, input_dim, rows, output):
-        super(TRAM_Att_solo, self).__init__()
-        self.input_dim = input_dim
-        self.output = output
+# GRAPH NEURAL NETWORKS
+class GraphConvolution(nn.Module):
+    def __init__(self, in_features, out_features):
+        super(GraphConvolution, self).__init__()
+        self.weight = nn.Parameter(torch.FloatTensor(in_features, out_features))
+        self.reset_parameters()
 
-        # Layers
-        self.dropout = nn.Dropout(0.5)
+    def reset_parameters(self):
+        nn.init.xavier_uniform_(self.weight)
 
-        self.fc1 = nn.Linear(self.input_dim, 256)
+    def forward(self, graph, features): # Se viene da NetworkX
+        adjacency_matrix = graph.adjacency_matrix() 
+        adjacency_matrix = torch.sparse.FloatTensor( #type: ignore
+            torch.LongTensor(adjacency_matrix.nonzero()).t(),
+            torch.FloatTensor([1.0] * adjacency_matrix.nnz),
+            torch.Size(adjacency_matrix.shape),
+        )
         
-        # Attention Mechanism
-        self.attention_a = nn.Linear(256, 64)
-        self.attention_b = nn.Linear(256, 64)
-        self.attention_c = nn.Linear(64, 1)
-
-        self.fc2 = nn.Linear(256, 128)
-
-        self.fc3 = nn.Linear(128, self.output)
-
-
-    def forward(self, x):
-        out1 = self.dropout(F.leaky_relu(self.fc1(x)))
-
-        attention_amut = self.dropout(F.tanh(self.attention_a(out1)))
-        attention_bmut = self.dropout(F.sigmoid(self.attention_b(out1)))
-        A = attention_amut.mul(attention_bmut)
-        attention_cmut = F.softmax(torch.transpose(self.attention_c(A), 2, 1), dim=1)
-
-        out1 = torch.matmul(attention_cmut, out1)
-
-        out1 = torch.flatten(out1, start_dim=1, end_dim=2)
-
-        out2 = self.dropout(F.leaky_relu(self.fc2(out1)))
-        
-        output = self.fc3(out2)
+        support = torch.mm(features, self.weight)
+        output = torch.sparse.mm(adjacency_matrix, support)
         return output
 
 
-class TRAM_Att_solo_one_hot(nn.Module):
-    def __init__(self, input_dim, rows, output):
-        super(TRAM_Att_solo_one_hot, self).__init__()
-        self.input_dim = input_dim
-        self.output = output
+class NNG(nn.Module):
+    def __init__(self, input_dim, rows, output_dim):
+        super(NNG, self).__init__()
+        self.graph_conv1 = GraphConvolution(input_dim, 128)
+        self.graph_conv2 = GraphConvolution(128, output_dim)
+        self.relu = nn.ReLU()
 
-        # Layers
-        self.dropout = nn.Dropout(0.5)
-
-        self.fc1 = nn.Linear(self.input_dim, 256)
-        
-        # Attention Mechanism
-        self.attention_a = nn.Linear(256, 64)
-        self.attention_b = nn.Linear(256, 64)
-        self.attention_c = nn.Linear(64, 1)
-
-        self.fc2 = nn.Linear(256, 128)
-
-        self.fc3 = nn.Linear(128 + 20, self.output)
-
-
-    def forward(self, x, tensor_one_hot):
-        out1 = self.dropout(F.leaky_relu(self.fc1(x)))
-
-        attention_amut = self.dropout(F.tanh(self.attention_a(out1)))
-        attention_bmut = self.dropout(F.sigmoid(self.attention_b(out1)))
-        A = attention_amut.mul(attention_bmut)
-        attention_cmut = F.softmax(torch.transpose(self.attention_c(A), 2, 1), dim=1)
-
-        out1 = torch.matmul(attention_cmut, out1)
-
-        out1 = torch.flatten(out1, start_dim=1, end_dim=2)
-
-        out2 = self.dropout(F.leaky_relu(self.fc2(out1)))
-        out2 = torch.hstack((out2, tensor_one_hot))
-        
-        output = self.fc3(out2)
-        return output
+    def forward(self, graph, features):
+        x = self.graph_conv1(graph, features)
+        x = self.relu(x)
+        x = self.graph_conv2(graph, x)
+        return x
     
 
 class CustomMatrixDataset(Dataset):

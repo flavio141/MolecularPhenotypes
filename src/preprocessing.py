@@ -21,7 +21,7 @@ def download_cif_file(cIDs, pdbs):
             cif_file = '{}.cif'.format(pdb_id)
             print(f'Download {cif_file}')
 
-            if (pdb_id + '_' + cID.split(':')[1] + '.pdb') in os.listdir('dataset/pdb'):
+            if (pdb_id + '_' + cID.split(':')[1] + '.pdb') in os.listdir('dataset/pdb_chain'):
                 continue
 
             url = 'https://files.rcsb.org/download/{}.cif'.format(pdb_id)
@@ -48,10 +48,11 @@ def download_cif_file(cIDs, pdbs):
                 pdb_io = PDBIO()
 
                 pdb_io.set_structure(selected_chain)
-                pdb_save = f'dataset/pdb/{pdb_id}_{chain.split(":")[1]}.pdb'
+                pdb_save = f'dataset/pdb_chain/{pdb_id}_{chain.split(":")[1]}.pdb'
                 pdb_io.save(pdb_save)
     except Exception as error:
         print(f'There was an error: {error}')
+        assert False
 
 
 def download_pdb_file(cIDs):
@@ -61,25 +62,23 @@ def download_pdb_file(cIDs):
         for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting PDB using UniProt ID')):
             pdb_id = cID.split(':')[0]
             chain_id = cID.split(':')[1]
-            pdb_list = PDBList(verbose=False)
 
-            if (pdb_id + '_' + chain_id + '.pdb') in os.listdir('dataset/pdb'):
+            if (pdb_id + '_' + chain_id + '.pdb') in os.listdir('dataset/pdb_chain'):
                 continue
     
             pdb_url = f'https://files.rcsb.org/download/{pdb_id}.pdb'
             
             pdb_response = r.get(pdb_url)
             if pdb_response.status_code == 200:
-                with open(os.path.join('dataset/pdb_temp', f'{pdb_id}.pdb'), 'wb') as file:
+                with open(os.path.join('dataset/pdb_full', f'{pdb_id}.pdb'), 'wb') as file:
                     file.write(pdb_response.content)
             else:
                 not_pdb.append(f'{pdb_id}:{chain_id}.pdb')
                 continue
 
-            pdb_list.retrieve_pdb_file(pdb_id, pdir="dataset/pdb_temp", file_format="pdb")
             parser = PDBParser(QUIET=True)
 
-            structure = parser.get_structure(pdb_id, f"dataset/pdb_temp/{pdb_id}.pdb")
+            structure = parser.get_structure(pdb_id, f"dataset/pdb_full/{pdb_id}.pdb")
 
             selected_chain = None
             for chain in structure[0]:
@@ -89,11 +88,12 @@ def download_pdb_file(cIDs):
 
             io = PDBIO()
             io.set_structure(selected_chain)
-            io.save(f"dataset/pdb/{pdb_id}_{chain_id}.pdb")
+            io.save(f"dataset/pdb_chain/{pdb_id}_{chain_id}.pdb")
 
         return not_pdb
     except r.exceptions.RequestException as e:
         print(f'Error {e}')
+        assert False
 
 
 def download_uniprot_file():
@@ -124,21 +124,17 @@ def download_uniprot_file():
                     file.write(fasta)
     except Exception as error:
         print(f'There was an error: {error}')
+        assert False
 
 
 def create_fasta_mutated(wildtype, position, mutation, pdb, args):
-    pdb_errors = open('pdb_errors.txt', 'w')
-
     for wt, pos, mut, pdb, count in zip(wildtype, position, mutation, pdb, tqdm(range(0, len(pdb)), desc= 'Extracting FASTA Mutated')):
         pdb_id = pdb.split(':')[0]
         chain = pdb.split(':')[1]
 
-        if args.paper == True:
-            with open(f'dataset/fasta_pdb/{pdb_id}_{chain}.fasta', 'r') as fasta:
-                fasta_original = fasta.read()
-        else:
-            with open(f'dataset/fasta/{pdb_id}_{chain}.fasta', 'r') as fasta:
-                fasta_original = fasta.read()
+
+        with open(f'dataset/fasta/{pdb_id}_{chain}.fasta', 'r') as fasta:
+            fasta_original = fasta.read()
         
         if len(fasta_original.split('\n')[1]) >= pos and fasta_original.split('\n')[1][pos - 1] == wt:
             if ',' in mut:
@@ -162,10 +158,8 @@ def create_fasta_mutated(wildtype, position, mutation, pdb, args):
                     mutated.write(fasta_mut)
         elif len(fasta_original.split('\n')[1]) >= pos:
             original = fasta_original.split("\n")[1][pos - 1]
-            pdb_errors.write(f'{pdb} in position {pos}')
             print(f'No match between {wt} and the amino acids at position {original}:{pos} for {pdb}')
         else:
-            pdb_errors.write(f'{pdb} in position {pos}')
             print(f'The position is out of range: {pos} and the pdb is {pdb}')
 
 
@@ -187,12 +181,13 @@ def feature_extraction_wt(cIDs):
             if not f'{pdb}.embeddings.pkl' in os.listdir('embedding/fastaEmb_wt'):
                 os.system(f'python GCN-for-Structure-and-Function/scripts/seqvec_embedder.py --input={path_fasta} --output={path_fasta_emb}')
 
-            path_pdb = f'dataset/pdb/{pdb}.pdb'
+            path_pdb = f'dataset/pdb_chain/{pdb}.pdb'
             path_pdb_emb = f'embedding/distmap_wt/{pdb}.distmap.npy'
-            if not f'{pdb}.distmap.npy' in os.listdir('embedding/distmap_wt'):
-                os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb} {"../../dataset/SNV.tsv"}')
+            #if not f'{pdb}.distmap.npy' in os.listdir('embedding/distmap_wt'):
+            os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb} {"dataset/SNV.tsv"}')
     except Exception as error:
         print(f'There was an error: {error}')
+        assert False
 
 
 def similarity():
@@ -242,6 +237,7 @@ def similarity():
         np.save('embedding/additional_features/similarity.npy', cos_similarity) # type: ignore
     except Exception as error:
         print(f'There was an error: {error}')
+        assert False
 
 
 def extract_data_wt():
@@ -271,6 +267,7 @@ def extract_data_wt():
         feature_extraction_wt(data['pdb_id'].unique())
     except Exception as error:
         print(f'There was an error: {error}')
+        assert False
 
 
 def extract_data_mut(args):
@@ -279,6 +276,7 @@ def extract_data_mut(args):
         feature_extraction_mut(os.listdir('dataset/fasta_mut'))
     except Exception as error:
         print(f'There was an error: {error}')
+        assert False
 
 
 def features(args, folders):

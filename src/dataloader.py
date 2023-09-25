@@ -98,33 +98,8 @@ def dataset_preparation_proteinbert(args, fastas):
     wildtype_mutated = []
     protein_to_mut = []
     labels = []
-    graphs = []
-    threshold = 8
 
     for fasta, count in zip(fastas, tqdm(range(0, len(fastas)), desc= 'Creating dictionary with matrices')):
-        distmap = np.load(f'embedding/distmap_wt/{fasta.split(".")[0]}.distmap.npy')
-        filtered_distmap = np.where(distmap > threshold, 1, 0)
-
-        G = nx.from_numpy_array(filtered_distmap)
-        seqs = ''
-        
-        with open(f'dataset/fasta_pdb/{fasta}', 'r') as file:
-            for line in file:
-                line = line.strip()
-                if line.startswith('>'):
-                    continue
-                seqs += line
-
-        assert G.number_of_nodes() == len(seqs)
-
-        attributes = {}
-        for node, a in enumerate(seqs):
-            attributes[node] = a
-
-        nx.set_node_attributes(G, attributes, name='aminoacid_name')
-
-        graphs.append(nx.to_dict_of_dicts(G))
-
         for mutation in matrices[fasta.split('.')[0]]:
             pdb_id = '_'.join(mutation[0].split('_')[:2])
             values = mutation[0].split('_')
@@ -147,4 +122,3 @@ def dataset_preparation_proteinbert(args, fastas):
     np.save('dataset/prepared/mapping.npy', protein_to_mut)
     np.save('dataset/prepared/data_processed.npy', wildtype_mutated)
     np.save('dataset/prepared/labels.npy', labels)
-    pickle.dump(graphs, open('embedding/additional_features/graphs.pickle', 'wb'))

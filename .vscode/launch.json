@@ -18,7 +18,7 @@
             "request": "launch",
             "program": "GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py",
             "console": "integratedTerminal",
-            "args": ["dataset/pdb/1kli_H.pdb", "embedding/distmap_wt/1kli_H.distmap.npy", "dataset/SNV.tds"],
+            "args": ["dataset/pdb_chain/3vcl_A.pdb", "embedding/distmap_wt/3vcl_A.distmap.npy", "dataset/SNV.tsv"],
             "justMyCode": false
         },
         {

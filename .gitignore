@@ -155,7 +155,8 @@ cython_debug/
 # Dataset
 dataset/fasta
 dataset/fasta_pdb
-dataset/pdb
+dataset/pdb_full
+dataset/pdb_chain
 dataset/cif
 dataset/pdb_temp
 dataset/fasta_mut
