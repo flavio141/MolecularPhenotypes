@@ -10,7 +10,7 @@ parser.add_argument('--extract_similarity', required=False, default=True, help='
 
 folders = ['dataset/fasta', 'dataset/pdb_chain', 'dataset/cif', 'dataset/pdb_full',
            'dataset/fasta_mut', 'embedding/fastaEmb_mut', 'embedding/additional_features',
-           'embedding/fastaEmb_wt', 'embedding/distmap_wt', 'embedding/graphs']
+           'embedding/fastaEmb_wt', 'embedding/graphs']
 
 args = parser.parse_args()
 

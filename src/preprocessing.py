@@ -9,9 +9,9 @@ import requests as r
 from tqdm import tqdm
 from unirep_emb import UniRep_embedding
 from sklearn.metrics.pairwise import cosine_similarity
-from Bio.PDB import MMCIFParser, PDBIO, PDBParser, PDBList
+from Bio.PDB import MMCIFParser, PDBIO, PDBParser
 
-data = pd.read_csv('dataset/SNV.tsv', sep='\t')
+data = pd.read_csv('dataset/database.tsv', sep='\t')
 
 
 def download_cif_file(cIDs, pdbs):
@@ -127,8 +127,8 @@ def download_uniprot_file():
         assert False
 
 
-def create_fasta_mutated(wildtype, position, mutation, pdb, args):
-    for wt, pos, mut, pdb, count in zip(wildtype, position, mutation, pdb, tqdm(range(0, len(pdb)), desc= 'Extracting FASTA Mutated')):
+def create_fasta_mutated(wildtype, position, mutation, pdb):
+    for wt, pos, mut, pdb, _ in zip(wildtype, position, mutation, pdb, tqdm(range(0, len(pdb)), desc= 'Extracting FASTA Mutated')):
         pdb_id = pdb.split(':')[0]
         chain = pdb.split(':')[1]
 
@@ -164,7 +164,7 @@ def create_fasta_mutated(wildtype, position, mutation, pdb, args):
 
 
 def feature_extraction_mut(cIDs):
-    for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting Features for FASTA Mutated')):
+    for cID, _ in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting Features for FASTA Mutated')):
         pdb = cID.split('.')[0]
         path_fasta = f'dataset/fasta_mut/{pdb}.fasta'
         path_fasta_emb = f'embedding/fastaEmb_mut/{pdb}.embeddings.pkl'
@@ -174,7 +174,7 @@ def feature_extraction_mut(cIDs):
 
 def feature_extraction_wt(cIDs):
     try:
-        for cID, step in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting Features for WildType')):
+        for cID, _ in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting Features for WildType')):
             pdb = '_'.join(cID.split(':'))
             path_fasta = f'dataset/fasta/{pdb}.fasta'
             path_fasta_emb = f'embedding/fastaEmb_wt/{pdb}.embeddings.pkl'
@@ -182,9 +182,12 @@ def feature_extraction_wt(cIDs):
                 os.system(f'python GCN-for-Structure-and-Function/scripts/seqvec_embedder.py --input={path_fasta} --output={path_fasta_emb}')
 
             path_pdb = f'dataset/pdb_chain/{pdb}.pdb'
-            path_pdb_emb = f'embedding/distmap_wt/{pdb}.distmap.npy'
-            #if not f'{pdb}.distmap.npy' in os.listdir('embedding/distmap_wt'):
-            os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb} {"dataset/SNV.tsv"}')
+            pdbs_info = data[(data['pdb_id'] == pdb.replace('_',':'))]
+
+            for _, info in pdbs_info.iterrows():
+                path_pdb_emb = f"embedding/graphs/{pdb}_{info['wildtype']}_{str(info['pdb_pos'])}_{info['mutation']}.pickle"
+                if not f"{pdb}_{info['wildtype']}_{str(info['pdb_pos'])}_{info['mutation']}.pickle" in os.listdir('embedding/graphs'):
+                    os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb} {"dataset/database.tsv"}')
     except Exception as error:
         print(f'There was an error: {error}')
         assert False
@@ -270,9 +273,9 @@ def extract_data_wt():
         assert False
 
 
-def extract_data_mut(args):
+def extract_data_mut():
     try:
-        create_fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'], args)
+        create_fasta_mutated(data['wildtype'], data['position'], data['mutation'], data['pdb_id'])
         feature_extraction_mut(os.listdir('dataset/fasta_mut'))
     except Exception as error:
         print(f'There was an error: {error}')
@@ -286,8 +289,9 @@ def features(args, folders):
 
     if args.extract_data_wt == True:
         extract_data_wt()
+
     if args.extract_data_mut == True:
-        extract_data_mut(args)
+        extract_data_mut()
 
     if args.extract_unirep == True:
         UniRep_embedding(os.listdir('dataset/fasta'), os.listdir('dataset/fasta_mut'))

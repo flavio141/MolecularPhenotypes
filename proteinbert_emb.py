@@ -5,7 +5,7 @@ from tqdm import tqdm
 from protein_bert.proteinbert.existing_model_loading import load_pretrained_model
 from protein_bert.proteinbert.conv_and_global_attention_model import get_model_with_hidden_layers_as_outputs
 
-data = pd.read_csv('dataset/SNV.tsv', sep='\t')
+data = pd.read_csv('dataset/database.tsv', sep='\t')
 
 
 def extract_features_proteinbert(fastas, fastas_mut):

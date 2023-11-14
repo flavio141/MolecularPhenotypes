@@ -18,7 +18,7 @@
             "request": "launch",
             "program": "GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py",
             "console": "integratedTerminal",
-            "args": ["dataset/pdb_chain/3vcl_A.pdb", "embedding/distmap_wt/3vcl_A.distmap.npy", "dataset/SNV.tsv"],
+            "args": ["dataset/pdb_chain/6npz_B.pdb", "embedding/distmap_wt/6npz_B.distmap.npy", "dataset/database.tsv"],
             "justMyCode": false
         },
         {
@@ -27,7 +27,16 @@
             "request": "launch",
             "program": "src/train_test.py",
             "console": "integratedTerminal",
-            "args": ["--trials=1", "--difference=False", "--global_metrics=True", "--fold_mapping=False", "--prepare_data=False", "--one_hot=True"],
+            "args": ["--trials=1", "--difference=True", "--global_metrics=True", "--fold_mapping=False", "--prepare_data=False", "--one_hot=True"],
+            "justMyCode": false
+        },
+        {
+            "name": "Python: Training Graph",
+            "type": "python",
+            "request": "launch",
+            "program": "src/graph_train.py",
+            "console": "integratedTerminal",
+            "args": ["--trials=1", "--difference=True", "--global_metrics=True", "--fold_mapping=False", "--prepare_data=//", "--one_hot=False"],
             "justMyCode": false
         },
         {

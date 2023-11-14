@@ -88,86 +88,96 @@ def test_metrics(metrics_test, mcc, spec, balanced_acc, auc):
 
 
 def save_bac(num_epochs, train_acc, test_acc, group, args):
-    if args.global_metrics == 'True':
-        if not os.path.exists(f'plots/trials_{args.trials}'):
-            os.mkdir(f'plots/trials_{args.trials}')
-        
-        plt.plot(range(int(num_epochs)), train_acc, label='Train Balanced Accuracy', color='blue')
-        plt.plot(range(int(num_epochs)), test_acc, label='Test Balanced Accuracy', color='red')
-
-        plt.xlabel('Epochs')
-        plt.ylabel('Accuracy')
-        plt.title('Balanced Accuracy - Train vs. Test')
-        plt.legend()
-        plt.show()
-        plt.savefig(f'plots/trials_{args.trials}/train_vs_test_{group}.png')
-
-        plt.clf()
-        plt.close()
+    if not os.path.exists(f'plots/trials_{args.trials}'):
+        os.mkdir(f'plots/trials_{args.trials}')
     
-    else:
-        wb = xl.Workbook()
-        ws = wb.active
-        ws.append([f'Label BAC: {label}'for label in range(15)])
+    plt.plot(range(int(num_epochs)), train_acc, label='Train Balanced Accuracy', color='blue')
+    plt.plot(range(int(num_epochs)), test_acc, label='Test Balanced Accuracy', color='red')
 
-        for train in train_acc:
-            if len(train) > 1:
-                ws.append(train.tolist())
-            else:
-                ws.append([train])
+    plt.text(0.8, 0.9, f'Best Train: {max(train_acc):.2f}', horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes,
+        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
 
-        ws.append([])
-        ws.append([f'Label Test BAC: {label}'for label in range(15)])
+    plt.text(0.8, 0.8, f'Best Test: {max(test_acc):.2f}', horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes,
+        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
 
-        for test in test_acc:
-            if len(test) > 1:
-                ws.append(test.tolist())
-            else:
-                ws.append([test])
-        
-        wb.save(f'results/trials_{args.trials}/Fold{group}_BAC_Results.xlsx')
-        wb.close()
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.title('Balanced Accuracy - Train vs. Test')
+    plt.legend()
+    plt.show()
+    plt.savefig(f'plots/trials_{args.trials}/BACTrain_vs_BACTest_{group}.png')
+
+    plt.clf()
+    plt.close()
+
+
+def save_spec(num_epochs, spec_train, spec_test, group, args):
+    if not os.path.exists(f'plots/trials_{args.trials}'):
+        os.mkdir(f'plots/trials_{args.trials}')
+    
+    plt.plot(range(int(num_epochs)), spec_train, label='Train Balanced Accuracy', color='blue')
+    plt.plot(range(int(num_epochs)), spec_test, label='Test Balanced Accuracy', color='red')
+
+    plt.text(0.8, 0.9, f'Best Train: {max(spec_train):.2f}', horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes,
+        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
+
+    plt.text(0.8, 0.8, f'Best Test: {max(spec_test):.2f}', horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes,
+        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
+
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.title('Specificity - Train vs. Test')
+    plt.legend()
+    plt.show()
+    plt.savefig(f'plots/trials_{args.trials}/SPECTrain_vs_SPECTest_{group}.png')
+
+    plt.clf()
+    plt.close()
+
+def save_mcc(num_epochs, mcc_train, mcc_test, group, args):
+    if not os.path.exists(f'plots/trials_{args.trials}'):
+        os.mkdir(f'plots/trials_{args.trials}')
+    
+    plt.plot(range(int(num_epochs)), mcc_train, label='Train MCC', color='blue')
+    plt.plot(range(int(num_epochs)), mcc_test, label='Test MCC', color='red')
+
+    plt.text(0.8, 0.9, f'Best Train: {max(mcc_train):.2f}', horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes,
+        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
+
+    plt.text(0.8, 0.8, f'Best Test: {max(mcc_test):.2f}', horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes,
+        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
+
+    plt.xlabel('Epochs')
+    plt.ylabel('MCC')
+    plt.title('Matthews - Train vs. Test')
+    plt.legend()
+    plt.show()
+    plt.savefig(f'plots/trials_{args.trials}/MCCTrain_vs_MCCTest_{group}.png')
+
+    plt.clf()
+    plt.close()
 
 
 def save_auc(num_epochs, auc_train, auc_test, group, args):
-    if args.global_metrics == 'True':
-        if not os.path.exists(f'plots/trials_{args.trials}'):
-            os.mkdir(f'plots/trials_{args.trials}')
+    if not os.path.exists(f'plots/trials_{args.trials}'):
+        os.mkdir(f'plots/trials_{args.trials}')
 
-        plt.plot(range(int(num_epochs)), auc_train, label='Train AUC', color='blue')
-        plt.plot(range(int(num_epochs)), auc_test, label='Test AUC', color='red')
+    plt.plot(range(int(num_epochs)), auc_train, label='Train AUC', color='blue')
+    plt.plot(range(int(num_epochs)), auc_test, label='Test AUC', color='red')
 
-        plt.xlabel('Epochs')
-        plt.ylabel('AUC')
-        plt.title('AUC per Epochs - Train vs. Test')
-        plt.legend()
-        plt.show()
-        plt.savefig(f'plots/trials_{args.trials}/AUCTrain_vs_AUCTest_{group}.png')
 
-        plt.clf()
-        plt.close()
-    else:
-        wb = xl.Workbook()
-        ws = wb.active
-        ws.append([f'Label AUC: {label}'for label in range(15)])
+    plt.text(0.8, 0.9, f'Best Train: {max(auc_train):.2f}', horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes,
+        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
 
-        for train in auc_train:
-            if len(train) > 1:
-                ws.append(train.tolist())
-            else:
-                ws.append([train])
+    plt.text(0.8, 0.8, f'Best Test: {max(auc_test):.2f}', horizontalalignment='center', verticalalignment='center', transform=plt.gca().transAxes,
+        bbox=dict(facecolor='white', edgecolor='black', boxstyle='round,pad=0.5'))
 
-        ws.append([])
-        ws.append([f'Label Test AUC: {label}'for label in range(15)])
+    plt.xlabel('Epochs')
+    plt.ylabel('AUC')
+    plt.title('AUC per Epochs - Train vs. Test')
+    plt.legend()
+    plt.show()
+    plt.savefig(f'plots/trials_{args.trials}/AUCTrain_vs_AUCTest_{group}.png')
 
-        for test in auc_test:
-            if len(test) > 1:
-                ws.append(test.tolist())
-            else:
-                ws.append([test])
-        
-        if not os.path.exists(f'results/trials_{args.trials}'):
-            os.mkdir(f'results/trials_{args.trials}')
-        
-        wb.save(f'results/trials_{args.trials}/Fold{group}_AUC_Results.xlsx')
-        wb.close()
+    plt.clf()
+    plt.close()

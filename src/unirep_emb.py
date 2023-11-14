@@ -3,10 +3,9 @@ import pickle
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from tqdm.contrib import tzip
 from jax_unirep import get_reps
 
-data = pd.read_csv('dataset/SNV.tsv', sep='\t')
+data = pd.read_csv('dataset/database.tsv', sep='\t')
 
 def UniRep_embedding(fastas, fastas_mut):
     unirep_emb = {}

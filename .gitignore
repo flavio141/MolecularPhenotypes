@@ -162,7 +162,7 @@ dataset/pdb_temp
 dataset/fasta_mut
 dataset/prepared
 dataset/HPMPdb
-dataset/paper
+dataset/SNV
 
 # Models
 model

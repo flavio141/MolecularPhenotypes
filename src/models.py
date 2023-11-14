@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch_geometric.nn import GCNConv, Sequential, global_add_pool
 from torch.utils.data import Dataset
-from utility import one_hot_aminoacids
+from torch_geometric.nn import MessagePassing
+from torch_geometric.utils import add_self_loops, degree
+
 
 # ATTENTION NEURAL NETWORKS
 class NeuralNetwork(nn.Module):
@@ -415,42 +418,194 @@ class NN7(nn.Module):
 
 
 # GRAPH NEURAL NETWORKS
-class GraphConvolution(nn.Module):
-    def __init__(self, in_features, out_features):
-        super(GraphConvolution, self).__init__()
-        self.weight = nn.Parameter(torch.FloatTensor(in_features, out_features))
-        self.reset_parameters()
+class GNNModel(torch.nn.Module):
+    def __init__(self, in_channels, rows, out_channels):
+        super(GNNModel, self).__init__()
+        self.conv1 = Sequential('x, edge_index', [
+            (GCNConv(in_channels, 8), 'x, edge_index -> x'),
+            nn.ReLU(inplace=True),
+            (GCNConv(8, 8), 'x, edge_index -> x'),
+            nn.ReLU(inplace=True)
+            ])
 
-    def reset_parameters(self):
-        nn.init.xavier_uniform_(self.weight)
+        self.linear = nn.Sequential(
+            nn.Linear(1562, 256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(256, 64),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(64, 8),
+            nn.ReLU(),
+            nn.Dropout(0.2)
+        )
 
-    def forward(self, graph, features): # Se viene da NetworkX
-        adjacency_matrix = graph.adjacency_matrix() 
-        adjacency_matrix = torch.sparse.FloatTensor( #type: ignore
-            torch.LongTensor(adjacency_matrix.nonzero()).t(),
-            torch.FloatTensor([1.0] * adjacency_matrix.nnz),
-            torch.Size(adjacency_matrix.shape),
+        self.flattening = nn.Sequential(
+            nn.Linear(rows * 8, 32),
+            nn.ReLU(),
+            nn.Dropout(0.2)
         )
         
-        support = torch.mm(features, self.weight)
-        output = torch.sparse.mm(adjacency_matrix, support)
+        self.output = nn.Linear(40, out_channels)
+
+    def forward(self, data, features):
+        xGCN = global_add_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
+        xLinear = self.linear(features).flatten(start_dim=1)
+
+        x = self.flattening(xLinear)
+        x = torch.hstack((xGCN, x))
+        output = self.output(x)
         return output
 
 
-class NNG(nn.Module):
-    def __init__(self, input_dim, rows, output_dim):
-        super(NNG, self).__init__()
-        self.graph_conv1 = GraphConvolution(input_dim, 128)
-        self.graph_conv2 = GraphConvolution(128, output_dim)
-        self.relu = nn.ReLU()
 
-    def forward(self, graph, features):
-        x = self.graph_conv1(graph, features)
-        x = self.relu(x)
-        x = self.graph_conv2(graph, x)
-        return x
+class GNNModelOneHot(torch.nn.Module):
+    def __init__(self, in_channels, rows, out_channels):
+        super(GNNModelOneHot, self).__init__()
+        self.conv1 = Sequential('x, edge_index', [
+            (GCNConv(in_channels, 8), 'x, edge_index -> x'),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(0.1),
+            (GCNConv(8, 8), 'x, edge_index -> x'),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(0.1)
+            ])
+
+        self.linear = nn.Sequential(
+            nn.Linear(1562, 256),
+            nn.LayerNorm(256),
+            nn.LeakyReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(256, 64),
+            nn.LayerNorm(64),
+            nn.LeakyReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(64, 8),
+            nn.LayerNorm(8),
+            nn.LeakyReLU(),
+            nn.Dropout(0.1)
+        )
+
+        self.flattening = nn.Sequential(
+            nn.Linear(rows * 8, 32),
+            nn.LayerNorm(32),
+            nn.LeakyReLU(),
+            nn.Dropout(0.1)
+        )
+        
+        self.output = nn.Linear(60, out_channels)
+
+    def forward(self, data, features, one_hot):
+        xGCN = global_add_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
+        xLinear = self.linear(features).flatten(start_dim=1)
+
+        x = self.flattening(xLinear)
+        x = torch.hstack((xGCN, x, one_hot))
+        output = self.output(x)
+        return output
     
 
+
+class GNNModelAttention(torch.nn.Module):
+    def __init__(self, in_channels, rows, out_channels):
+        super(GNNModelAttention, self).__init__()
+        # GraphConvolution
+        self.conv1 = Sequential('x, edge_index', [
+            (GCNConv(in_channels, 12), 'x, edge_index -> x'),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(0.2),
+            (GCNConv(12, 8), 'x, edge_index -> x'),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(0.2)
+            ])
+
+        # Layer Linear
+        self.linear = nn.Sequential(
+            nn.Linear(1562, 256),
+            nn.LayerNorm(256),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2)
+        )
+        
+        # Attention Mechanism
+        self.attention_a = nn.Sequential(
+            nn.Linear(256, 64),
+            nn.Tanh(),
+            nn.Dropout(0.2)
+        )
+        self.attention_b = nn.Sequential(
+            nn.Linear(256, 64),
+            nn.Sigmoid(),
+            nn.Dropout(0.2)
+        )
+        self.attention_c = nn.Linear(64, 1)
+
+        # Flattening
+        self.flattening = nn.Sequential(
+            nn.Linear(256, 8),
+            nn.LayerNorm(8),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2)
+        )
+        
+        # Output
+        self.output = nn.Linear(16, out_channels)
+
+    def forward(self, data, features, one_hot):
+        xGCN = global_add_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
+        xLinearFirst = self.linear(features)
+
+        attention_amut = self.attention_a(xLinearFirst)
+        attention_bmut = self.attention_b(xLinearFirst)
+        A = attention_amut.mul(attention_bmut)
+        attention_cmut = F.softmax(torch.transpose(self.attention_c(A), 2, 1), dim=1)
+
+        xLinearAttention = torch.matmul(attention_cmut, xLinearFirst)
+        
+        x = self.flattening(xLinearAttention).flatten(start_dim=1)
+        x = torch.hstack((xGCN, x))
+        output = self.output(x)
+        return output
+
+
+class GNNModelSimple(torch.nn.Module):
+    def __init__(self, in_channels, rows, out_channels):
+        super(GNNModelSimple, self).__init__()
+        self.conv1 = Sequential('x, edge_index', [
+            (GCNConv(in_channels, 12), 'x, edge_index -> x'),
+            nn.LeakyReLU(inplace=True),
+            (GCNConv(12, 12), 'x, edge_index -> x'),
+            nn.LeakyReLU(inplace=True)
+            ])
+        
+        self.attention_a = nn.Sequential(
+            nn.Linear(12, 4),
+            nn.Tanh(),
+            nn.Dropout(0.2)
+        )
+        self.attention_b = nn.Sequential(
+            nn.Linear(12, 4),
+            nn.Sigmoid(),
+            nn.Dropout(0.2)
+        )
+        self.attention_c = nn.Linear(4, 1)
+        
+        self.output = nn.Linear(13, out_channels)
+
+    def forward(self, data, features):
+        xGCN = global_add_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
+
+        attention_amut = self.attention_a(xGCN)
+        attention_bmut = self.attention_b(xGCN)
+        A = attention_amut.mul(attention_bmut)
+        attention_cmut = F.softmax(self.attention_c(A), dim=1)
+
+        xGCNAttention = torch.hstack((F.softmax(self.attention_c(A), dim=1), xGCN))
+
+        output = self.output(xGCNAttention)
+        return output
+
+# DATASET
 class CustomMatrixDataset(Dataset):
     def __init__(self, X, y, indices):
         self.X = torch.tensor(X, dtype=torch.float32)
@@ -462,6 +617,20 @@ class CustomMatrixDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.X[idx], self.y[idx], self.indices[idx]
+    
+
+class DataLoaderGraph(Dataset):
+    def __init__(self, graphs, features, labels, indices):
+        self.features = torch.tensor(features, dtype=torch.float32)
+        self.graphs = graphs
+        self.labels = torch.tensor(labels, dtype=torch.float32)
+        self.indices = indices
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+        return self.graphs[idx], self.features[idx], self.labels[idx], self.indices[idx]
 
 
 class MatrixDataset(Dataset):
