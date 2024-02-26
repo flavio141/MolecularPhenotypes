@@ -174,7 +174,7 @@ def feature_extraction_mut(cIDs):
 
 def feature_extraction_wt(cIDs):
     try:
-        for cID, _ in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting Features for WildType')):
+        for cID, _ in zip(cIDs, tqdm(range(0, len(cIDs)), desc= 'Extracting Graphs and Features')):
             pdb = '_'.join(cID.split(':'))
             path_fasta = f'dataset/fasta/{pdb}.fasta'
             path_fasta_emb = f'embedding/fastaEmb_wt/{pdb}.embeddings.pkl'
@@ -185,9 +185,15 @@ def feature_extraction_wt(cIDs):
             pdbs_info = data[(data['pdb_id'] == pdb.replace('_',':'))]
 
             for _, info in pdbs_info.iterrows():
-                path_pdb_emb = f"embedding/graphs/{pdb}_{info['wildtype']}_{str(info['pdb_pos'])}_{info['mutation']}.pickle"
-                if not f"{pdb}_{info['wildtype']}_{str(info['pdb_pos'])}_{info['mutation']}.pickle" in os.listdir('embedding/graphs'):
-                    os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb} {"dataset/database.tsv"}')
+                if ',' in info['mutation']:
+                    for mut in info['mutation'].split(','):
+                        path_pdb_emb = f"embedding/graphs/{pdb}_{info['wildtype']}_{str(info['pdb_pos'])}_{mut}.pickle"
+                        if not f"{pdb}_{info['wildtype']}_{str(info['pdb_pos'])}_{info['mutation']}.pickle" in os.listdir('embedding/graphs'):
+                            os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb} {info["wildtype"]} {str(info["pdb_pos"])} {mut}')
+                else:
+                    path_pdb_emb = f"embedding/graphs/{pdb}_{info['wildtype']}_{str(info['pdb_pos'])}_{info['mutation']}.pickle"
+                    if not f"{pdb}_{info['wildtype']}_{str(info['pdb_pos'])}_{info['mutation']}.pickle" in os.listdir('embedding/graphs'):
+                        os.system(f'python GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py {path_pdb} {path_pdb_emb} {info["wildtype"]} {str(info["pdb_pos"])} {info["mutation"]}')
     except Exception as error:
         print(f'There was an error: {error}')
         assert False

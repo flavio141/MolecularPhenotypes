@@ -1,38 +1,50 @@
 import os
 import torch
-import openpyxl as xl
+import numpy as np
 import matplotlib.pyplot as plt
 from torchmetrics import AUROC
+from sklearn.metrics import matthews_corrcoef, balanced_accuracy_score, recall_score, f1_score
 
 auroc = AUROC(task='binary', ignore_index=-999)
 
 
-def custom_metrics(y_true, y_pred, digits, labels):
-    true_positives = torch.logical_and(y_true == 1., y_pred == 1.).sum().item()
-    true_negatives = torch.logical_and(y_true == 0., y_pred == 0.).sum().item()
-    false_positives = torch.logical_and(y_true == 0., y_pred == 1.).sum().item()
-    false_negatives = torch.logical_and(y_true == 1., y_pred == 0.).sum().item()
+def custom_metrics(y_true, y_pred, digits, labels, args):
+    if args.multiclass == 'True':
+        y_true, y_pred = y_true.cpu().detach().numpy(), np.argmax(y_pred.cpu().detach().numpy(), axis=1) - 1
+        mcc = matthews_corrcoef(y_true, y_pred)
+        balanced_acc = balanced_accuracy_score(y_true, y_pred)
+        rec = recall_score(y_true, y_pred, average='weighted')
+        f1Score = f1_score(y_true, y_pred, average='weighted')
+        auc = 0
+        prec = 0
+        spec = 0
 
-    # Calcola il coefficiente di Matthews
-    mcc = ((true_positives * true_negatives) - (false_positives * false_negatives)) / (
-        (true_positives + false_positives) * (true_positives + false_negatives) * (true_negatives + false_positives) * (true_negatives + false_negatives) + 1e-08) ** 0.5
-    
-    prec = true_positives / (true_positives + false_positives + 1e-08)
+    else:
+        true_positives = torch.logical_and(y_true == 1., y_pred == 1.).sum().item()
+        true_negatives = torch.logical_and(y_true == 0., y_pred == 0.).sum().item()
+        false_positives = torch.logical_and(y_true == 0., y_pred == 1.).sum().item()
+        false_negatives = torch.logical_and(y_true == 1., y_pred == 0.).sum().item()
 
-    rec = true_positives / (true_positives + false_negatives + 1e-08)
+        # Calcola il coefficiente di Matthews
+        mcc = ((true_positives * true_negatives) - (false_positives * false_negatives)) / (
+            (true_positives + false_positives) * (true_positives + false_negatives) * (true_negatives + false_positives) * (true_negatives + false_negatives) + 1e-08) ** 0.5
+        
+        prec = true_positives / (true_positives + false_positives + 1e-08)
 
-    spec = true_negatives / (true_negatives + false_positives + 1e-08)
+        rec = true_positives / (true_positives + false_negatives + 1e-08)
 
-    f1_score = (2 * prec * rec) / (prec + rec + 1e-08)
+        spec = true_negatives / (true_negatives + false_positives + 1e-08)
 
-    balanced_acc = (rec + spec) / 2
+        f1Score = (2 * prec * rec) / (prec + rec + 1e-08)
 
-    auc = auroc(digits, labels).item()
+        balanced_acc = (rec + spec) / 2
 
-    return mcc, prec, rec, spec, balanced_acc, f1_score, auc
+        auc = auroc(digits, labels).item()
+
+    return mcc, prec, rec, spec, balanced_acc, f1Score, auc
 
 
-def label_metrics(y_true, y_pred):
+def label_metrics(y_true, y_pred, args):
     spec_per_column = []
     balanced_per_column = []
     matthews_per_column = []
@@ -50,7 +62,7 @@ def label_metrics(y_true, y_pred):
         label_column = label_column[valid_indices]
 
         if len(pred_column) > 0:
-            mcc, _, _, spec, balanced_acc, _, auc = custom_metrics(label_column, pred_column, y_pred, y_true)
+            mcc, _, _, spec, balanced_acc, _, auc = custom_metrics(label_column, pred_column, y_pred, y_true, args)
 
             spec_per_column.append(torch.tensor(spec))
             balanced_per_column.append(torch.tensor(balanced_acc))

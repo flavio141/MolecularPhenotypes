@@ -1,10 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, Sequential, global_add_pool
+from torch_geometric.nn import GCNConv, GAT, Sequential, global_add_pool, global_mean_pool
 from torch.utils.data import Dataset
-from torch_geometric.nn import MessagePassing
-from torch_geometric.utils import add_self_loops, degree
 
 
 # ATTENTION NEURAL NETWORKS
@@ -423,37 +421,42 @@ class GNNModel(torch.nn.Module):
         super(GNNModel, self).__init__()
         self.conv1 = Sequential('x, edge_index', [
             (GCNConv(in_channels, 8), 'x, edge_index -> x'),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             (GCNConv(8, 8), 'x, edge_index -> x'),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(inplace=True)
             ])
 
         self.linear = nn.Sequential(
-            nn.Linear(1562, 256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, 64),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(64, 8),
-            nn.ReLU(),
-            nn.Dropout(0.2)
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(),
+            nn.AvgPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(),
+            nn.AvgPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(1, 1, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU()
         )
 
         self.flattening = nn.Sequential(
-            nn.Linear(rows * 8, 32),
-            nn.ReLU(),
+            nn.Linear(7680, 256),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(256, 128),
+            nn.LeakyReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, 32),
+            nn.LeakyReLU(),
             nn.Dropout(0.2)
         )
         
-        self.output = nn.Linear(40, out_channels)
+        self.output = nn.Linear(60, out_channels)
 
-    def forward(self, data, features):
-        xGCN = global_add_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
-        xLinear = self.linear(features).flatten(start_dim=1)
+    def forward(self, data, features, one_hot):
+        xGCN = global_mean_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
+        xLinear = self.linear(features.reshape(features.shape[0], 1, features.shape[1], features.shape[2])).flatten(start_dim=1)
 
         x = self.flattening(xLinear)
-        x = torch.hstack((xGCN, x))
+        x = torch.hstack((xGCN, x, one_hot))
         output = self.output(x)
         return output
 
@@ -465,63 +468,104 @@ class GNNModelOneHot(torch.nn.Module):
         self.conv1 = Sequential('x, edge_index', [
             (GCNConv(in_channels, 8), 'x, edge_index -> x'),
             nn.LeakyReLU(inplace=True),
-            nn.Dropout(0.1),
+            #nn.Dropout(0.2),
             (GCNConv(8, 8), 'x, edge_index -> x'),
             nn.LeakyReLU(inplace=True),
-            nn.Dropout(0.1)
+            #nn.Dropout(0.2)
             ])
 
         self.linear = nn.Sequential(
-            nn.Linear(1562, 256),
-            nn.LayerNorm(256),
+            nn.Linear(2560, 256),
+            nn.BatchNorm1d(rows),
             nn.LeakyReLU(),
-            nn.Dropout(0.1),
+            nn.Dropout(0.3),
             nn.Linear(256, 64),
-            nn.LayerNorm(64),
+            nn.BatchNorm1d(rows),
             nn.LeakyReLU(),
-            nn.Dropout(0.1),
+            nn.Dropout(0.3),
             nn.Linear(64, 8),
-            nn.LayerNorm(8),
+            nn.BatchNorm1d(rows),
             nn.LeakyReLU(),
-            nn.Dropout(0.1)
+            nn.Dropout(0.3)
         )
 
         self.flattening = nn.Sequential(
             nn.Linear(rows * 8, 32),
-            nn.LayerNorm(32),
+            nn.BatchNorm1d(32),
             nn.LeakyReLU(),
-            nn.Dropout(0.1)
+            nn.Dropout(0.3)
         )
         
         self.output = nn.Linear(60, out_channels)
 
     def forward(self, data, features, one_hot):
-        xGCN = global_add_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
+        xGCN = global_mean_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
         xLinear = self.linear(features).flatten(start_dim=1)
 
         x = self.flattening(xLinear)
         x = torch.hstack((xGCN, x, one_hot))
         output = self.output(x)
         return output
-    
+
+
+class GAttention(torch.nn.Module):
+    def __init__(self, in_channels, rows, out_channels):
+        super(GAttention, self).__init__()
+        self.dropout = 0.3
+        self.conv1 = GAT(in_channels=in_channels, hidden_channels=6, num_layers=1, out_channels=4, act='leakyrelu', v2=True, jk='lstm')
+
+        self.linear = nn.Sequential(
+            nn.Linear(2560, 256),
+            nn.LayerNorm(256),
+            nn.LeakyReLU(),
+            nn.Dropout(self.dropout),
+            nn.Linear(256, 64),
+            nn.LayerNorm(64),
+            nn.LeakyReLU(),
+            nn.Dropout(self.dropout),
+            nn.Linear(64, 8),
+            nn.LayerNorm(8),
+            nn.LeakyReLU(),
+            nn.Dropout(self.dropout)
+        )
+
+        self.flattening = nn.Sequential(
+            nn.Linear(rows * 8, 32),
+            nn.LayerNorm(32),
+            nn.LeakyReLU(),
+            nn.Dropout(self.dropout)
+        )
+        
+        self.output = nn.Linear(56, out_channels)
+
+    def forward(self, data, features, one_hot):
+        xGCN = global_mean_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
+        xLinear = self.linear(features).flatten(start_dim=1)
+
+        x = self.flattening(xLinear)
+        x = torch.hstack((xGCN, x, one_hot))
+        output = self.output(x)
+        return output
 
 
 class GNNModelAttention(torch.nn.Module):
     def __init__(self, in_channels, rows, out_channels):
         super(GNNModelAttention, self).__init__()
         # GraphConvolution
-        self.conv1 = Sequential('x, edge_index', [
-            (GCNConv(in_channels, 12), 'x, edge_index -> x'),
-            nn.LeakyReLU(inplace=True),
-            nn.Dropout(0.2),
-            (GCNConv(12, 8), 'x, edge_index -> x'),
-            nn.LeakyReLU(inplace=True),
-            nn.Dropout(0.2)
-            ])
+        self.conv1 = GAT(in_channels=in_channels, hidden_channels=6, num_layers=1, out_channels=8, act='leakyrelu', v2=True, jk='lstm')
+
+        #self.conv1 = Sequential('x, edge_index', [
+        #    (GCNConv(in_channels, 12), 'x, edge_index -> x'),
+        #    nn.LeakyReLU(inplace=True),
+        #    nn.Dropout(0.2),
+        #    (GCNConv(12, 8), 'x, edge_index -> x'),
+        #    nn.LeakyReLU(inplace=True),
+        #    nn.Dropout(0.2)
+        #    ])
 
         # Layer Linear
         self.linear = nn.Sequential(
-            nn.Linear(1562, 256),
+            nn.Linear(2560, 256),
             nn.LayerNorm(256),
             nn.LeakyReLU(),
             nn.Dropout(0.2)
@@ -549,10 +593,10 @@ class GNNModelAttention(torch.nn.Module):
         )
         
         # Output
-        self.output = nn.Linear(16, out_channels)
+        self.output = nn.Linear(36, out_channels)
 
     def forward(self, data, features, one_hot):
-        xGCN = global_add_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
+        xGCN = global_mean_pool(self.conv1(data.x, data.edge_index), batch=data.batch)
         xLinearFirst = self.linear(features)
 
         attention_amut = self.attention_a(xLinearFirst)
@@ -563,7 +607,7 @@ class GNNModelAttention(torch.nn.Module):
         xLinearAttention = torch.matmul(attention_cmut, xLinearFirst)
         
         x = self.flattening(xLinearAttention).flatten(start_dim=1)
-        x = torch.hstack((xGCN, x))
+        x = torch.hstack((xGCN, x, one_hot))
         output = self.output(x)
         return output
 

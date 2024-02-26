@@ -18,7 +18,7 @@
             "request": "launch",
             "program": "GCN-for-Structure-and-Function/scripts/convert_pdb_to_distmap.py",
             "console": "integratedTerminal",
-            "args": ["dataset/pdb_chain/6npz_B.pdb", "embedding/distmap_wt/6npz_B.distmap.npy", "dataset/database.tsv"],
+            "args": ["dataset/pdb_chain/3u84_A.pdb", "embedding/graphs/3u84_A_A_182_F.pickle", "A", "182", "F"],
             "justMyCode": false
         },
         {
@@ -36,7 +36,7 @@
             "request": "launch",
             "program": "src/graph_train.py",
             "console": "integratedTerminal",
-            "args": ["--trials=1", "--difference=True", "--global_metrics=True", "--fold_mapping=False", "--prepare_data=//", "--one_hot=False"],
+            "args": ["--trials=0", "--difference=True", "--global_metrics=True", "--fold_mapping=True", "--prepare_data=False", "--one_hot=True"],
             "justMyCode": false
         },
         {
